@@ -36,7 +36,8 @@ MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "voice_leads_db")
 USE_SQLITE_FALLBACK = os.getenv("USE_SQLITE_FALLBACK", "true").lower() in ("true", "1", "yes")
-SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", str(current_dir / "voice_leads.db"))
+_default_sqlite = "/tmp/voice_leads.db" if os.getenv("VERCEL") else str(current_dir / "voice_leads.db")
+SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", _default_sqlite)
 
 # Telephony Configuration
 # Supported providers: 'simulated', 'exotel', 'twilio'

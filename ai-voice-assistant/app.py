@@ -49,7 +49,10 @@ active_sessions: Dict[str, LeadConversationEngine] = {}
 # Static & Template directories
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-STATIC_DIR.mkdir(exist_ok=True)
+try:
+    STATIC_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 
 # -------------------------------------------------------------

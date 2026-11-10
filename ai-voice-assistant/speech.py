@@ -33,9 +33,16 @@ try:
 except ImportError:
     genai = None
 
-# Audio disk cache directory
-AUDIO_CACHE_DIR = Path(__file__).resolve().parent / "audio_cache"
-AUDIO_CACHE_DIR.mkdir(exist_ok=True)
+# Audio disk cache directory (use /tmp on Vercel serverless environment)
+if os.getenv("VERCEL"):
+    AUDIO_CACHE_DIR = Path("/tmp/audio_cache")
+else:
+    AUDIO_CACHE_DIR = Path(__file__).resolve().parent / "audio_cache"
+
+try:
+    AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 # Exclusively female voices for natural customer conversation
 FEMALE_VOICES = {"Aoede", "Kore", "Leda", "Callirrhoe", "Sulafat"}
