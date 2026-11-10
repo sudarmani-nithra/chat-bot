@@ -145,6 +145,10 @@ def create_call(
     telephony_call_sid: Optional[str] = None
 ) -> Dict[str, Any]:
     """Creates a new voice call record."""
+    try:
+        init_db()
+    except Exception:
+        pass
     conn = _get_connection()
     cursor = conn.cursor()
     prod_json = json.dumps(product_snapshot or {}, ensure_ascii=False)
@@ -241,6 +245,10 @@ def add_transcript(call_id: str, speaker: str, text: str) -> None:
 
 def get_call(call_id: str) -> Optional[Dict[str, Any]]:
     """Retrieves full call record by call_id."""
+    try:
+        init_db()
+    except Exception:
+        pass
     conn = _get_connection()
     cursor = conn.cursor()
     if _DB_TYPE == "sqlite":

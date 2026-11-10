@@ -210,6 +210,7 @@
   <!-- Interactive Logic -->
   <script>
     let activeCallId = null;
+    let clientTurnHistory = [];
     let currentLanguage = 'ta';
     let isSpeaking = false;
     let isRecording = false;
@@ -360,6 +361,7 @@
         }
 
         activeCallId = data.callId;
+        clientTurnHistory = [{ speaker: 'AI', text: data.initial_greeting }];
 
         // Start timer
         callSeconds = 0;
@@ -415,6 +417,7 @@
 
       // Append customer message
       appendMessage('CUSTOMER', text, currentLanguage);
+      clientTurnHistory.push({ speaker: 'CUSTOMER', text: text });
 
       // Check if this is a question enquiry and immediately play a natural thinking filler
       const isQuestion = isQuestionOrEnquiry(text);
@@ -452,7 +455,10 @@
         const res = await fetch(`/api/voice-leads/calls/${activeCallId}/turn`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text })
+          body: JSON.stringify({
+            text: text,
+            history: clientTurnHistory
+          })
         });
 
         const data = await res.json();
@@ -471,6 +477,7 @@
 
         // Append AI response
         appendMessage('AI', data.reply_text, data.language || currentLanguage, data.audio_url);
+        clientTurnHistory.push({ speaker: 'AI', text: data.reply_text });
 
         // If customer confirmed interest -> Display STRICT ORDER JSON!
         if (data.lead_status === 'INTERESTED' && data.order_payload) {

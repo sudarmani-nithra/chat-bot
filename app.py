@@ -1,6 +1,7 @@
 """
 Multilingual AI Voice Calling Assistant Backend.
 FastAPI implementation with REST APIs, WebSocket real-time events,
+FastAPI implementation with REST APIs, WebSocket real-time events,
 telephony webhook idempotency, and local voice conversation simulator.
 """
 
@@ -17,7 +18,17 @@ try:
     from typing import Dict, Any, Optional, List
     from pathlib import Path
 
-    from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+    from fastapi import (
+        FastAPI,
+        HTTPException,
+        Request,
+        Response,
+        WebSocket,
+        WebSocketDisconnect,
+        UploadFile,
+        File,
+        Form,
+    )
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse
     from pydantic import BaseModel, Field
@@ -34,7 +45,7 @@ try:
     app = FastAPI(
         title="Multilingual AI Voice Calling Assistant for Lead Conversion",
         description="Automated AI Voice Assistant calling leads in native Tamil and Telugu with strict JSON order output.",
-        version="1.0.0"
+        version="1.0.0",
     )
 
     # Global runtime error catcher middleware
@@ -44,7 +55,10 @@ try:
             return await call_next(request)
         except Exception as exc:
             err_trace = traceback.format_exc()
-            print(f"[RUNTIME ERROR] {request.method} {request.url.path}:\n{err_trace}", file=sys.stderr)
+            print(
+                f"[RUNTIME ERROR] {request.method} {request.url.path}:\n{err_trace}",
+                file=sys.stderr,
+            )
             html = f"""
             <!DOCTYPE html>
             <html>
@@ -78,7 +92,6 @@ try:
     except Exception:
         pass
 
-
     # -------------------------------------------------------------
     # Diagnostic Health Check
     # -------------------------------------------------------------
@@ -91,9 +104,8 @@ try:
             "app": "Multilingual AI Voice Assistant",
             "gemini_key_present": bool(config.GEMINI_API_KEY),
             "telephony_provider": config.TELEPHONY_PROVIDER,
-            "sqlite_path": config.SQLITE_DB_PATH
+            "sqlite_path": config.SQLITE_DB_PATH,
         }
-
 
     # -------------------------------------------------------------
     # Pydantic Request Models
@@ -101,14 +113,53 @@ try:
 
     class CallInitiateRequest(BaseModel):
         mobile: str = Field(..., description="Customer 10-digit mobile number")
-        proid: str = Field(..., description="Product ID from catalog (e.g. PROD101, 10)")
-        language: Optional[str] = Field("ta", description="Language code: 'ta' (Tamil) or 'te' (Telugu)")
-        simulate: Optional[bool] = Field(None, description="Force local simulation mode")
-
+        proid: str = Field(
+            ..., description="Product ID from catalog (e.g. PROD101, 10)"
+        )
+        language: Optional[str] = Field(
+            "ta", description="Language code: 'ta' (Tamil) or 'te' (Telugu)"
+        )
+        simulate: Optional[bool] = Field(
+            None, description="Force local simulation mode"
+        )
 
     class ConversationTurnRequest(BaseModel):
-        text: str = Field(..., description="Customer speech utterance or transcribed text")
+        text: str = Field(
+            ..., description="Customer speech utterance or transcribed text"
+        )
+        history: Optional[List[Dict[str, str]]] = Field(
+            None,
+            description="Previous conversation turns for stateless serverless recovery",
+        )
 
+    # -------------------------------------------------------------
+    # Stateless Serverless Call ID Helpers
+    # -------------------------------------------------------------
+
+    def generate_call_id(mobile: str, proid: str, language: str) -> str:
+        """Encodes session parameters into a stateless, URL-safe call identifier."""
+        clean_mobile = re.sub(r"\D", "", str(mobile))[-10:]
+        clean_proid = re.sub(r"[^a-zA-Z0-9]", "", str(proid)) or "PROD101"
+        clean_lang = language if language in ("ta", "te") else "ta"
+        uid = uuid.uuid4().hex[:8].upper()
+        return f"CALL_{uid}_{clean_mobile}_{clean_proid}_{clean_lang}"
+
+    def parse_call_id(call_id: str) -> Optional[Dict[str, str]]:
+        """Decodes session parameters from call_id for serverless auto-recovery."""
+        try:
+            if not call_id or not isinstance(call_id, str):
+                return None
+            parts = call_id.split("_")
+            if len(parts) >= 5 and parts[0] == "CALL":
+                return {
+                    "uid": parts[1],
+                    "mobile": parts[2],
+                    "proid": parts[3],
+                    "language": parts[4],
+                }
+        except Exception:
+            pass
+        return None
 
     # -------------------------------------------------------------
     # Mobile Validation Helper
@@ -128,10 +179,11 @@ try:
             cleaned = cleaned[1:]
 
         if not re.match(r"^[6-9]\d{9}$", cleaned):
-            raise ValueError("Invalid Indian mobile number. Must be a valid 10-digit number starting with 6, 7, 8, or 9.")
+            raise ValueError(
+                "Invalid Indian mobile number. Must be a valid 10-digit number starting with 6, 7, 8, or 9."
+            )
 
         return cleaned
-
 
     async def warmup_lead_cache(engine: LeadConversationEngine):
         """Pre-synthesizes voice audio in background for all precomputed product responses."""
@@ -141,7 +193,6 @@ try:
                     await speech.synthesize_speech_async(text, engine.language)
         except Exception as e:
             print(f"[Cache Warmup] Error pre-caching audio for {engine.call_id}: {e}")
-
 
     # -------------------------------------------------------------
     # REST Endpoints
@@ -160,7 +211,10 @@ try:
 
         product_data = catalog.get_product(proid_clean)
         if not product_data:
-            raise HTTPException(status_code=404, detail=f"Product with ID '{proid_clean}' not found in catalog.")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product with ID '{proid_clean}' not found in catalog.",
+            )
 
         lang = req.language.lower().strip() if req.language else "ta"
         if lang not in ("ta", "te"):
@@ -173,14 +227,14 @@ try:
             if not is_simulated and not provider.is_configured():
                 is_simulated = True
 
-        call_id = f"CALL_{uuid.uuid4().hex[:12].upper()}"
+        call_id = generate_call_id(valid_mobile, proid_clean, lang)
 
         engine = LeadConversationEngine(
             call_id=call_id,
             mobile=valid_mobile,
             proid=proid_clean,
             language=lang,
-            product_info=product_data
+            product_info=product_data,
         )
         active_sessions[call_id] = engine
 
@@ -188,7 +242,7 @@ try:
             to_mobile=valid_mobile,
             call_id=call_id,
             language=lang,
-            product_info=product_data
+            product_info=product_data,
         )
 
         initial_greeting = engine.get_initial_greeting()
@@ -200,7 +254,7 @@ try:
             language=lang,
             is_simulated=is_simulated,
             product_snapshot=product_data,
-            telephony_call_sid=telephony_result.get("provider_call_id")
+            telephony_call_sid=telephony_result.get("provider_call_id"),
         )
 
         database.add_transcript(call_id=call_id, speaker="AI", text=initial_greeting)
@@ -218,31 +272,52 @@ try:
             "product": product_data,
             "initial_greeting": initial_greeting,
             "audio_url": audio_url,
-            "telephony": telephony_result
+            "telephony": telephony_result,
         }
-
 
     @app.get("/api/voice-leads/calls/{callId}", tags=["Voice Leads"])
     async def get_voice_lead_call(callId: str):
         call = database.get_call(callId)
         if not call:
-            raise HTTPException(status_code=404, detail="Call ID not found")
+            parsed = parse_call_id(callId)
+            if parsed:
+                product_data = catalog.get_product(parsed["proid"]) or {}
+                call = database.create_call(
+                    call_id=callId,
+                    mobile=parsed["mobile"],
+                    proid=parsed["proid"],
+                    language=parsed["language"],
+                    is_simulated=True,
+                    product_snapshot=product_data,
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Call ID not found")
         return call
-
 
     @app.get("/api/voice-leads/calls/{callId}/transcript", tags=["Voice Leads"])
     async def get_voice_lead_transcript(callId: str):
         call = database.get_call(callId)
         if not call:
-            raise HTTPException(status_code=404, detail="Call ID not found")
+            parsed = parse_call_id(callId)
+            if parsed:
+                product_data = catalog.get_product(parsed["proid"]) or {}
+                call = database.create_call(
+                    call_id=callId,
+                    mobile=parsed["mobile"],
+                    proid=parsed["proid"],
+                    language=parsed["language"],
+                    is_simulated=True,
+                    product_snapshot=product_data,
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Call ID not found")
         transcript = database.get_call_transcript(callId)
         return {
             "callId": callId,
             "status": call.get("status"),
             "lead_status": call.get("lead_status"),
-            "transcript": transcript
+            "transcript": transcript,
         }
-
 
     @app.post("/api/voice-leads/webhooks/telephony", tags=["Telephony Webhooks"])
     async def handle_telephony_webhook(request: Request):
@@ -263,22 +338,28 @@ try:
         event_id = parsed_event.get("event_id")
 
         if event_id and database.is_event_processed(event_id):
-            return JSONResponse({"status": "ignored", "message": "Duplicate event already processed"})
+            return JSONResponse(
+                {"status": "ignored", "message": "Duplicate event already processed"}
+            )
 
         call_id = parsed_event.get("call_id")
         if call_id:
             existing_call = database.get_call(call_id)
             if existing_call:
                 new_status = parsed_event.get("status", existing_call.get("status"))
-                lead_status = parsed_event.get("lead_status") or existing_call.get("lead_status")
-                duration = parsed_event.get("duration", existing_call.get("duration_seconds", 0))
+                lead_status = parsed_event.get("lead_status") or existing_call.get(
+                    "lead_status"
+                )
+                duration = parsed_event.get(
+                    "duration", existing_call.get("duration_seconds", 0)
+                )
 
                 database.update_call_status(
                     call_id=call_id,
                     status=new_status,
                     lead_status=lead_status,
                     duration_seconds=duration,
-                    telephony_call_sid=parsed_event.get("provider_call_sid")
+                    telephony_call_sid=parsed_event.get("provider_call_sid"),
                 )
 
         if event_id:
@@ -286,17 +367,28 @@ try:
                 event_id=event_id,
                 call_id=call_id,
                 event_type=parsed_event.get("status", "webhook"),
-                payload=parsed_event
+                payload=parsed_event,
             )
 
         return {"status": "success", "event_id": event_id}
-
 
     @app.post("/api/voice-leads/calls/{callId}/turn", tags=["Voice Simulator"])
     async def conversation_turn(callId: str, req: ConversationTurnRequest):
         call = database.get_call(callId)
         if not call:
-            raise HTTPException(status_code=404, detail="Call ID not found")
+            parsed = parse_call_id(callId)
+            if parsed:
+                product_data = catalog.get_product(parsed["proid"]) or {}
+                call = database.create_call(
+                    call_id=callId,
+                    mobile=parsed["mobile"],
+                    proid=parsed["proid"],
+                    language=parsed["language"],
+                    is_simulated=True,
+                    product_snapshot=product_data,
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Call ID not found")
 
         engine = active_sessions.get(callId)
         if not engine:
@@ -305,13 +397,22 @@ try:
                 mobile=call["mobile"],
                 proid=call["proid"],
                 language=call["language"],
-                product_info=call.get("product_snapshot") or {}
+                product_info=call.get("product_snapshot") or {},
             )
             active_sessions[callId] = engine
 
+        # Sync client-side conversation history if provided for serverless continuity
+        if req.history and isinstance(req.history, list) and len(req.history) > 0:
+            engine.history = req.history
+            has_ai_turn = any(h.get("speaker") == "AI" for h in req.history)
+            if has_ai_turn and engine.state == "START":
+                engine.state = "INTERACTION"
+
         customer_text = req.text.strip()
         if not customer_text:
-            raise HTTPException(status_code=400, detail="Customer text cannot be empty.")
+            raise HTTPException(
+                status_code=400, detail="Customer text cannot be empty."
+            )
 
         database.add_transcript(call_id=callId, speaker="CUSTOMER", text=customer_text)
         engine.history.append({"speaker": "CUSTOMER", "text": customer_text})
@@ -330,10 +431,12 @@ try:
             call_id=callId,
             status=call_status,
             lead_status=lead_status,
-            order_payload=order_payload
+            order_payload=order_payload,
         )
 
-        audio_url = await speech.synthesize_speech_base64_async(reply_text, engine.language)
+        audio_url = await speech.synthesize_speech_base64_async(
+            reply_text, engine.language
+        )
 
         return {
             "callId": callId,
@@ -343,12 +446,13 @@ try:
             "lead_status": lead_status,
             "order_payload": order_payload,
             "is_completed": is_completed,
-            "audio_url": audio_url
+            "audio_url": audio_url,
         }
 
-
     @app.post("/api/voice-leads/stt", tags=["Speech"])
-    async def transcribe_speech(audio_file: UploadFile = File(...), language: str = Form("ta")):
+    async def transcribe_speech(
+        audio_file: UploadFile = File(...), language: str = Form("ta")
+    ):
         audio_bytes = await audio_file.read()
         if not audio_bytes:
             return {"transcript": ""}
@@ -356,10 +460,9 @@ try:
         transcript = speech.transcribe_audio_gemini(
             audio_bytes=audio_bytes,
             mime_type=audio_file.content_type or "audio/webm",
-            language_hint=language
+            language_hint=language,
         )
         return {"transcript": transcript}
-
 
     @app.post("/api/voice-leads/tts", tags=["Speech"])
     async def synthesize_tts(request: Request):
@@ -369,13 +472,11 @@ try:
         audio_url = await speech.synthesize_speech_base64_async(text, language)
         return {"audio_url": audio_url}
 
-
     @app.get("/api/voice-leads/fillers", tags=["Speech"])
     async def get_filler_phrases():
         ta_fillers = [
             "ஒரு நிமிஷம், செக் பண்ணி சொல்றேன்.",
             "இருங்க, பார்த்து சொல்றேன்.",
-            "நல்ல கேள்வி, சொல்றேன்.",
             "சரிங்க, பார்த்து சொல்றேன்.",
         ]
         te_fillers = [
@@ -395,16 +496,13 @@ try:
 
         return result
 
-
     @app.get("/api/voice-leads/calls", tags=["Voice Leads"])
     async def list_recent_calls(limit: int = 50, lead_status: Optional[str] = None):
         return database.list_calls(limit=limit, lead_status=lead_status)
 
-
     @app.get("/api/products", tags=["Product Catalog"])
     async def list_catalog_products():
         return catalog.list_sample_products(limit=25)
-
 
     # -------------------------------------------------------------
     # Admin Dashboard Frontend Route
@@ -420,7 +518,9 @@ try:
                 content = html_path.read_text(encoding="utf-8")
                 return HTMLResponse(content=content, status_code=200)
             except Exception as e:
-                return HTMLResponse(f"<h1>Error reading dashboard template: {e}</h1>", status_code=200)
+                return HTMLResponse(
+                    f"<h1>Error reading dashboard template: {e}</h1>", status_code=200
+                )
         return HTMLResponse("<h1>AI Voice Assistant Dashboard</h1>", status_code=200)
 
 except Exception as fatal_err:
@@ -432,7 +532,9 @@ except Exception as fatal_err:
 
     app = FastAPI(title="Startup Error Fallback")
 
-    @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"])
+    @app.api_route(
+        "/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]
+    )
     async def fatal_fallback(path: str = ""):
         html = f"""
         <!DOCTYPE html>
@@ -447,6 +549,8 @@ except Exception as fatal_err:
         """
         return HTMLResponse(content=html, status_code=200)
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app:app", host=config.HOST, port=config.PORT, reload=config.DEBUG)
