@@ -30,7 +30,7 @@ else:
 
 try:
     AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-except OSError:
+except Exception:
     pass
 
 # Exclusively female voices for natural customer conversation

@@ -26,12 +26,12 @@ GEMINI_VOICE = os.getenv("GEMINI_VOICE", "Aoede")
 
 # Server configuration
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "8000"))
+PORT = int(os.getenv("PORT") or 8000)
 DEBUG = os.getenv("DEBUG", "true").lower() in ("true", "1", "yes")
 
 # Database configuration (MySQL with SQLite automatic fallback)
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_PORT = int(os.getenv("MYSQL_PORT") or 3306)
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "voice_leads_db")
