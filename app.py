@@ -104,7 +104,7 @@ try:
             "app": "Multilingual AI Voice Assistant",
             "gemini_key_present": bool(config.GEMINI_API_KEY),
             "telephony_provider": config.TELEPHONY_PROVIDER,
-            "sqlite_path": config.SQLITE_DB_PATH,
+            "database": "in_memory (zero db connection)",
         }
 
     # -------------------------------------------------------------

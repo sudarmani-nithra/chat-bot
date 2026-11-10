@@ -29,15 +29,8 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT") or 8000)
 DEBUG = os.getenv("DEBUG", "true").lower() in ("true", "1", "yes")
 
-# Database configuration (MySQL with SQLite automatic fallback)
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT") or 3306)
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "voice_leads_db")
-USE_SQLITE_FALLBACK = os.getenv("USE_SQLITE_FALLBACK", "true").lower() in ("true", "1", "yes")
-_default_sqlite = "/tmp/voice_leads.db" if os.getenv("VERCEL") else str(current_dir / "voice_leads.db")
-SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", _default_sqlite)
+# Data Store Configuration (Zero DB connection mode - pure in-memory)
+DB_MODE = os.getenv("DB_MODE", "in_memory")
 
 # Telephony Configuration
 # Supported providers: 'simulated', 'exotel', 'twilio'
