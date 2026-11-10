@@ -21,7 +21,7 @@ else:
 
 # Gemini AI Key & Models
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_AUDIO_MODEL = os.getenv("GEMINI_AUDIO_MODEL", "gemini-2.5-flash-native-audio-latest")
+GEMINI_AUDIO_MODEL = os.getenv("GEMINI_AUDIO_MODEL", "gemini-2.0-flash-exp")
 GEMINI_VOICE = os.getenv("GEMINI_VOICE", "Aoede")
 
 # Server configuration

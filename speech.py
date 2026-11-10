@@ -35,7 +35,7 @@ except Exception:
 
 # Exclusively female voices for natural customer conversation
 FEMALE_VOICES = {"Aoede", "Kore", "Leda", "Callirrhoe", "Sulafat"}
-DEFAULT_MODEL = getattr(config, "GEMINI_AUDIO_MODEL", "gemini-2.5-flash-native-audio-latest")
+DEFAULT_MODEL = getattr(config, "GEMINI_AUDIO_MODEL", "gemini-2.0-flash-exp")
 DEFAULT_VOICE = "Aoede"  # 100% Female natural voice
 
 
@@ -184,20 +184,21 @@ def synthesize_tamil_speech(
     model_name: str = DEFAULT_MODEL,
     voice_name: str = DEFAULT_VOICE,
 ) -> bytes:
-    """Generates natural audio speech using Gemini Live API with automatic fallback."""
+    """Generates natural audio speech using Gemini Live API."""
     if not api_key:
         raise ValueError("Gemini API key is required.")
     if not text or not text.strip():
         raise ValueError("Text cannot be empty.")
 
     cleaned_text = text.strip()
-    candidate_models = [model_name]
-    for alt_model in ["gemini-2.5-flash-native-audio-latest", "gemini-2.0-flash-exp"]:
-        if alt_model not in candidate_models:
-            candidate_models.append(alt_model)
+    candidate_models = [model_name, "gemini-2.0-flash-exp"]
+    unique_models = []
+    for m in candidate_models:
+        if m and m not in unique_models:
+            unique_models.append(m)
 
     last_error = None
-    for m in candidate_models:
+    for m in unique_models:
         for attempt in range(2):
             try:
                 return run_async_coroutine(
@@ -207,17 +208,9 @@ def synthesize_tamil_speech(
                 last_error = e
                 err_str = str(e).lower()
                 if "503" in err_str or "high demand" in err_str or "unavailable" in err_str:
-                    time.sleep(1.0)
+                    time.sleep(0.5)
 
-            try:
-                return _generate_speech_content_sync(api_key, cleaned_text, m, voice_name)
-            except Exception as fallback_error:
-                last_error = fallback_error
-                err_str = str(fallback_error).lower()
-                if "503" in err_str or "high demand" in err_str or "unavailable" in err_str:
-                    time.sleep(1.0)
-
-    raise RuntimeError(f"Failed to generate voice via Gemini Audio models: {last_error}")
+    raise RuntimeError(f"Gemini Live voice synthesis failed: {last_error}")
 
 
 def _get_cache_path(text: str, language: str, voice_name: str) -> Path:
