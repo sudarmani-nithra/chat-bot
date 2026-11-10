@@ -440,7 +440,11 @@ async def serve_admin_dashboard():
     """Serves the rich web-based Admin Dashboard and Voice Simulator."""
     html_path = STATIC_DIR / "index.html"
     if html_path.exists():
-        return FileResponse(html_path)
+        try:
+            content = html_path.read_text(encoding="utf-8")
+            return HTMLResponse(content=content)
+        except Exception as e:
+            return HTMLResponse(f"<h1>Error reading dashboard template: {e}</h1>", status_code=500)
     return HTMLResponse("<h1>AI Voice Assistant Dashboard</h1>")
 
 

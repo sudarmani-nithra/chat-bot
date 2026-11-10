@@ -368,6 +368,9 @@ def record_webhook_event(event_id: str, call_id: Optional[str], event_type: str,
     conn.close()
 
 
-# Initialize tables on import
-init_db()
+# Initialize tables on import safely
+try:
+    init_db()
+except Exception as e:
+    print(f"[DB] Initial database setup warning (will retry on demand): {e}")
 
