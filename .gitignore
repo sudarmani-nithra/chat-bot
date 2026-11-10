@@ -1,0 +1,37 @@
+# Environment & Secrets
+.env
+*.env
+!.env.example
+ai-voice-assistant/.env
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+voice_leads.db
+ai-voice-assistant/voice_leads.db
+
+# Audio Caches & Local Sessions
+audio_cache/
+ai-voice-assistant/audio_cache/
+.voice_sessions/
+ai-voice-assistant/.voice_sessions/
+
+# Streamlit & IDEs
+.streamlit/
+.idea/
+.vscode/
+
+# Operating System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+

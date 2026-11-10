@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nithra AI Voice Calling Assistant | Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .lang-ta { font-family: 'Noto Sans Tamil', 'Plus Jakarta Sans', sans-serif; }
+    .lang-te { font-family: 'Noto Sans Telugu', 'Plus Jakarta Sans', sans-serif; }
+    .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+
+    @keyframes sound-pulse {
+      0%, 100% { height: 4px; }
+      50% { height: 18px; }
+    }
+    .wave-bar-active:nth-child(1) { animation: sound-pulse 0.7s infinite ease-in-out; }
+    .wave-bar-active:nth-child(2) { animation: sound-pulse 0.9s infinite ease-in-out 0.15s; }
+    .wave-bar-active:nth-child(3) { animation: sound-pulse 0.6s infinite ease-in-out 0.3s; }
+    .wave-bar-active:nth-child(4) { animation: sound-pulse 0.8s infinite ease-in-out 0.2s; }
+    .wave-bar-active:nth-child(5) { animation: sound-pulse 0.7s infinite ease-in-out 0.4s; }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.2); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .mic-recording-pulse {
+      animation: pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- Chat Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur sticky top-0 z-40 px-4 sm:px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="relative">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-white font-bold text-base shadow-md shadow-amber-500/20">
+          AI
+        </div>
+        <span id="callStatusDot" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-slate-500 border-2 border-slate-900"></span>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-sm sm:text-base text-white">Nithra AI Voice Calling Assistant</h1>
+          <span id="langPill" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">TAMIL / TELUGU</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <span id="callStatusText">Ready for Lead JSON</span>
+          <span id="callDuration" class="font-mono text-slate-400 hidden">• 00:00</span>
+          <span id="leadStatusBadge" class="hidden text-[10px] font-bold px-2 py-0.2 rounded-full bg-slate-800 text-slate-300">UNDECIDED</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Actions -->
+    <div class="flex items-center space-x-2">
+      <!-- Speaking Waveform Indicator -->
+      <div id="aiSpeakingWave" class="hidden items-center gap-0.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium">
+        <span class="w-1 bg-amber-400 rounded-full h-2 wave-bar-active"></span>
+        <span class="w-1 bg-amber-400 rounded-full h-3 wave-bar-active"></span>
+        <span class="w-1 bg-amber-400 rounded-full h-4 wave-bar-active"></span>
+        <span class="w-1 bg-amber-400 rounded-full h-2 wave-bar-active"></span>
+        <span class="ml-1 text-[11px] font-semibold">Speaking...</span>
+      </div>
+
+      <button 
+        onclick="interruptAI()" 
+        id="interruptBtn" 
+        class="hidden px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition"
+        title="Interrupt AI speaking immediately"
+      >
+        Interrupt
+      </button>
+
+      <button 
+        onclick="openJsonModal()" 
+        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
+      >
+        <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span>New Lead</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Chat Container -->
+  <main class="flex-1 max-w-4xl w-full mx-auto flex flex-col p-4 overflow-hidden relative">
+
+    <!-- Scrollable Messages Container -->
+    <div id="chatMessages" class="flex-1 overflow-y-auto space-y-4 pr-1 pb-4">
+      
+      <!-- Welcome Starter Box (shown before call is started) -->
+      <div id="welcomeBox" class="py-6 px-5 rounded-2xl bg-slate-900/80 border border-slate-800 text-center space-y-4 shadow-xl">
+        <div class="inline-flex p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+        </div>
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-white">Enter Lead JSON to Start Call</h2>
+          <p class="text-xs text-slate-400 max-w-md mx-auto mt-1">
+            Provide the mobile number, product ID, and language. The AI will start speaking immediately in Tamil or Telugu, then you can reply via voice or text.
+          </p>
+        </div>
+
+        <!-- Sample JSON Preview -->
+        <div class="max-w-md mx-auto bg-slate-950 border border-slate-800 rounded-xl p-3 text-left font-mono-code text-xs text-amber-400">
+          <pre>{
+  "mobile": "9876543210",
+  "proid": "PROD101",
+  "language": "ta"
+}</pre>
+        </div>
+
+        <!-- Quick 1-Click Launch Buttons -->
+        <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+          <button onclick="startWithLead('9876543210', 'PROD101', 'ta')" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/10 transition">
+            🇮🇳 Start Tamil Lead (PROD101)
+          </button>
+          <button onclick="startWithLead('9123456789', '10', 'te')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition">
+            🇮🇳 Start Telugu Lead (PROD 10)
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Quick Response Chips (contextual during conversation) -->
+    <div id="quickChipsBar" class="hidden flex-wrap items-center gap-1.5 py-2 overflow-x-auto text-xs">
+      <!-- Injected dynamically based on language -->
+    </div>
+
+    <!-- Bottom Input Bar -->
+    <div class="pt-2">
+      <form id="chatForm" onsubmit="event.preventDefault(); handleSend();" class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-2xl p-1.5 focus-within:border-amber-500/60 shadow-xl transition">
+        
+        <!-- Microphone Button (Voice Input) -->
+        <button 
+          type="button" 
+          id="micBtn" 
+          onclick="toggleVoiceInput()" 
+          class="p-2.5 sm:p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center justify-center relative select-none"
+          title="Speak in Tamil / Telugu"
+        >
+          <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"></path></svg>
+        </button>
+
+        <!-- Text Input -->
+        <input 
+          type="text" 
+          id="chatInput" 
+          placeholder="Paste JSON lead or type customer reply in Tamil / Telugu..." 
+          class="flex-1 bg-transparent px-2.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none"
+          autocomplete="off"
+        />
+
+        <!-- Send Button -->
+        <button 
+          type="submit" 
+          id="sendBtn" 
+          class="p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-bold transition flex items-center justify-center shadow-md shadow-amber-500/20"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </button>
+      </form>
+      <p id="micStatusNote" class="text-[10px] text-center text-slate-500 mt-1.5">
+        Tip: Click mic to speak in Tamil or Telugu. You can also paste JSON directly to start a new call.
+      </p>
+    </div>
+
+  </main>
+
+  <!-- Modal for JSON Lead Input -->
+  <div id="jsonModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-white text-sm">New Lead JSON</h3>
+        <button onclick="closeJsonModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">Enter Lead JSON Payload:</label>
+        <textarea 
+          id="modalJsonText" 
+          rows="5" 
+          class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono-code text-amber-400 focus:outline-none focus:border-amber-500"
+        >{
+  "mobile": "9876543210",
+  "proid": "PROD101",
+  "language": "ta"
+}</textarea>
+      </div>
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeJsonModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="submitJsonModal()" class="px-4 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950">Start Call</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Audio Player for Speech -->
+  <audio id="audioPlayer" class="hidden"></audio>
+
+  <!-- Interactive Logic -->
+  <script>
+    let activeCallId = null;
+    let currentLanguage = 'ta';
+    let isSpeaking = false;
+    let isRecording = false;
+    let recognition = null;
+    let callTimer = null;
+    let callSeconds = 0;
+    let fillerRotationIndex = 0;
+    let preloadedFillers = { ta: [], te: [] };
+
+    // Preload natural thinking fillers from backend
+    async function loadPreloadedFillers() {
+      try {
+        const res = await fetch('/api/voice-leads/fillers');
+        if (res.ok) {
+          preloadedFillers = await res.json();
+        }
+      } catch (e) {
+        console.warn("Could not preload fillers", e);
+      }
+    }
+    loadPreloadedFillers();
+
+    function isQuestionOrEnquiry(text) {
+      if (!text) return false;
+      const t = text.toLowerCase();
+      const questionKeywords = [
+        "?", "என்ன", "எப்படி", "எத்தனை", "எப்போ", "எவ்ளோ", "எவ்வளவு", "விலை", "ரேட்", 
+        "price", "rate", "cost", "delivery", "டெலிவரி", "cod", "spec", "மணிகள்", 
+        "beads", "பலன்", "விவரம்", "details", "offer", "ஆஃபர்", "discount",
+        "ఎంత", "ధర", "వివరాలు", "లాభాలు", "డెలివరీ", "పూసలు"
+      ];
+      return questionKeywords.some(k => t.includes(k));
+    }
+
+    function appendThinkingBubble(fillerText) {
+      const container = document.getElementById('chatMessages');
+      const id = 'thinking-' + Date.now();
+      const div = document.createElement('div');
+      div.id = id;
+      div.className = "flex flex-col items-start space-y-1";
+      div.innerHTML = `
+        <div class="flex items-center space-x-1.5 text-[10px] font-medium text-amber-400">
+          <span>AI Calling Assistant</span>
+          <span>•</span>
+          <span class="italic text-slate-400">Thinking...</span>
+        </div>
+        <div class="max-w-[85%] rounded-2xl px-4 py-2 text-xs sm:text-sm font-medium bg-slate-900 border border-amber-500/40 text-amber-300 rounded-tl-sm flex items-center gap-2 shadow-lg">
+          <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+          <span>${fillerText}</span>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      return id;
+    }
+
+    function removeThinkingBubble(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    const QUICK_REPLIES = {
+      ta: [
+        "ஆமா, வாங்க விருப்பம் இருக்கு",
+        "இதோட விலை என்ன?",
+        "Cash on Delivery இருக்கா?",
+        "வேண்டாம், விருப்பம் இல்ல",
+        "இப்போ busy, அப்புறம் கூப்பிடுங்க"
+      ],
+      te: [
+        "హా, కొనడానికి ఆసక్తి ఉంది",
+        "దీని ధర ఎంత?",
+        "క్యాష్ ఆన్ డెలివరీ ఉందా?",
+        "వద్దు, నాకు ఆసక్తి లేదు",
+        "ఇప్పుడు బిజీ, తరువాత కాల్ చేయండి"
+      ]
+    };
+
+    function openJsonModal() {
+      document.getElementById('jsonModal').classList.remove('hidden');
+    }
+
+    function closeJsonModal() {
+      document.getElementById('jsonModal').classList.add('hidden');
+    }
+
+    function submitJsonModal() {
+      const text = document.getElementById('modalJsonText').value.trim();
+      try {
+        const parsed = JSON.parse(text);
+        closeJsonModal();
+        startCallWithPayload(parsed);
+      } catch (e) {
+        alert("Invalid JSON format. Please check syntax.");
+      }
+    }
+
+    function startWithLead(mobile, proid, language) {
+      startCallWithPayload({
+        mobile: mobile,
+        proid: proid,
+        language: language
+      });
+    }
+
+    async function startCallWithPayload(payload) {
+      interruptAI();
+      const mobile = String(payload.mobile || '').trim();
+      const proid = String(payload.proid || '').trim();
+      const language = (payload.language || 'ta').toLowerCase();
+
+      if (!/^[6-9]\d{9}$/.test(mobile)) {
+        alert("Please provide a valid 10-digit Indian mobile number.");
+        return;
+      }
+      if (!proid) {
+        alert("Product ID (proid) is required.");
+        return;
+      }
+
+      currentLanguage = language;
+      document.getElementById('langPill').textContent = language === 'te' ? 'TELUGU (తెలుగు)' : 'TAMIL (தமிழ்)';
+      document.getElementById('welcomeBox').classList.add('hidden');
+
+      // Add Lead Card to chat feed
+      appendLeadJsonCard(payload);
+
+      // Update Header
+      document.getElementById('callStatusText').textContent = "Connecting...";
+      document.getElementById('callStatusDot').className = "absolute bottom-0 right-0 w-3 h-3 rounded-full bg-amber-400 animate-ping border-2 border-slate-900";
+
+      try {
+        const res = await fetch('/api/voice-leads/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mobile: mobile,
+            proid: proid,
+            language: language,
+            simulate: true
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert("Error: " + (data.detail || data.message || "Failed to start call"));
+          return;
+        }
+
+        activeCallId = data.callId;
+
+        // Start timer
+        callSeconds = 0;
+        clearInterval(callTimer);
+        document.getElementById('callDuration').classList.remove('hidden');
+        callTimer = setInterval(() => {
+          callSeconds++;
+          const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+          const s = String(callSeconds % 60).padStart(2, '0');
+          document.getElementById('callDuration').textContent = `• ${m}:${s}`;
+        }, 1000);
+
+        document.getElementById('callStatusText').textContent = "In Call";
+        document.getElementById('callStatusDot').className = "absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900";
+        document.getElementById('leadStatusBadge').classList.remove('hidden');
+        updateLeadBadge("UNDECIDED");
+
+        // Append initial AI turn & SPEAK IMMEDIATELY
+        appendMessage('AI', data.initial_greeting, language, data.audio_url);
+        speakAiResponse(data.initial_greeting, language, data.audio_url);
+
+        updateQuickChips();
+      } catch (err) {
+        alert("Network error: " + err.message);
+      }
+    }
+
+    async function handleSend() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+
+      // Check if user entered a JSON lead payload directly in chat bar
+      if (text.startsWith('{') && text.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed.mobile && parsed.proid) {
+            startCallWithPayload(parsed);
+            return;
+          }
+        } catch (e) {}
+      }
+
+      if (!activeCallId) {
+        alert("Please enter a lead JSON first to start the voice call!");
+        return;
+      }
+
+      // Interrupt AI if currently speaking
+      interruptAI();
+
+      // Append customer message
+      appendMessage('CUSTOMER', text, currentLanguage);
+
+      // Check if this is a question enquiry and immediately play a natural thinking filler
+      const isQuestion = isQuestionOrEnquiry(text);
+      let thinkingBubbleId = null;
+
+      if (isQuestion) {
+        const fillersList = (preloadedFillers[currentLanguage] && preloadedFillers[currentLanguage].length)
+          ? preloadedFillers[currentLanguage]
+          : (currentLanguage === 'te'
+              ? [
+                  { text: "ఒక్క నిమిషం, చెక్ చేసి చెప్తాను." },
+                  { text: "మంచి ప్రశ్న అండి, చెప్తాను." },
+                  { text: "ఉండండి, చూసి చెప్తాను." },
+                  { text: "సరే అండి, చూసి చెప్తాను." }
+                ]
+              : [
+                  { text: "ஒரு நிமிஷம், செக் பண்ணி சொல்றேன்." },
+                  { text: "இருங்க, பார்த்து சொல்றேன்." },
+                  { text: "நல்ல கேள்வி, சொல்றேன்." },
+                  { text: "சரிங்க, பார்த்து சொல்றேன்." }
+                ]
+            );
+
+        const selectedFiller = fillersList[fillerRotationIndex % fillersList.length];
+        fillerRotationIndex++;
+
+        // Show thinking bubble in UI
+        thinkingBubbleId = appendThinkingBubble(selectedFiller.text);
+
+        // Immediately speak natural acknowledgment with 0ms delay!
+        speakAiResponse(selectedFiller.text, currentLanguage, selectedFiller.audio_url);
+      }
+
+      try {
+        const res = await fetch(`/api/voice-leads/calls/${activeCallId}/turn`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          if (thinkingBubbleId) removeThinkingBubble(thinkingBubbleId);
+          alert("Error: " + (data.detail || "Failed turn"));
+          return;
+        }
+
+        // Remove thinking bubble before appending final answer
+        if (thinkingBubbleId) {
+          removeThinkingBubble(thinkingBubbleId);
+        }
+
+        updateLeadBadge(data.lead_status);
+
+        // Append AI response
+        appendMessage('AI', data.reply_text, data.language || currentLanguage, data.audio_url);
+
+        // If customer confirmed interest -> Display STRICT ORDER JSON!
+        if (data.lead_status === 'INTERESTED' && data.order_payload) {
+          appendStrictOrderPayload(data.order_payload);
+        }
+
+        if (data.is_completed) {
+          document.getElementById('callStatusText').textContent = "Call Ended";
+          document.getElementById('callStatusDot').className = "absolute bottom-0 right-0 w-3 h-3 rounded-full bg-slate-500 border-2 border-slate-900";
+          clearInterval(callTimer);
+        }
+
+        // AI Speaks Out Loud Full Answer
+        speakAiResponse(data.reply_text, data.language || currentLanguage, data.audio_url);
+      } catch (err) {
+        if (thinkingBubbleId) removeThinkingBubble(thinkingBubbleId);
+        console.error(err);
+      }
+    }
+
+    // Speech Audio Playback (Neural Audio + Browser SpeechSynthesis fallback)
+    function speakAiResponse(text, lang, audioUrl) {
+      interruptAI();
+      isSpeaking = true;
+      document.getElementById('aiSpeakingWave').classList.remove('hidden');
+      document.getElementById('aiSpeakingWave').classList.add('flex');
+      document.getElementById('interruptBtn').classList.remove('hidden');
+
+      if (audioUrl) {
+        const player = document.getElementById('audioPlayer');
+        player.src = audioUrl;
+        player.onended = () => onSpeakingEnd();
+        player.onerror = () => fallbackBrowserSpeech(text, lang);
+        player.play().catch(() => fallbackBrowserSpeech(text, lang));
+      } else {
+        fallbackBrowserSpeech(text, lang);
+      }
+    }
+
+    function fallbackBrowserSpeech(text, lang) {
+      if (!('speechSynthesis' in window)) {
+        onSpeakingEnd();
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang === 'te' ? 'te-IN' : 'ta-IN';
+      utterance.pitch = 1.05; // Natural clear female pitch
+      utterance.rate = 0.95;
+
+      // Ensure exclusively female voice is selected
+      const voices = window.speechSynthesis.getVoices();
+      const targetLocale = lang === 'te' ? 'te' : 'ta';
+      const femaleVoice = voices.find(v => 
+        v.lang.toLowerCase().startsWith(targetLocale) && 
+        (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('pallavi') || v.name.toLowerCase().includes('shruti') || v.name.toLowerCase().includes('natural'))
+      ) || voices.find(v => v.lang.toLowerCase().startsWith(targetLocale) && !v.name.toLowerCase().includes('male') && !v.name.toLowerCase().includes('valluvar') && !v.name.toLowerCase().includes('mohan'))
+        || voices.find(v => v.lang.toLowerCase().startsWith(targetLocale));
+
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
+        utterance.onend = () => onSpeakingEnd();
+        utterance.onerror = () => onSpeakingEnd();
+        window.speechSynthesis.speak(utterance);
+      } else {
+        // Browser has no native Tamil/Telugu voice pack. Fetch authentic server female voice audio instead of speaking in English!
+        fetch('/api/voice-leads/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text, language: lang })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.audio_url) {
+            const player = document.getElementById('audioPlayer');
+            player.src = data.audio_url;
+            player.onended = () => onSpeakingEnd();
+            player.onerror = () => onSpeakingEnd();
+            player.play().catch(() => onSpeakingEnd());
+          } else {
+            onSpeakingEnd();
+          }
+        })
+        .catch(() => onSpeakingEnd());
+      }
+    }
+
+    function onSpeakingEnd() {
+      isSpeaking = false;
+      document.getElementById('aiSpeakingWave').classList.add('hidden');
+      document.getElementById('aiSpeakingWave').classList.remove('flex');
+      document.getElementById('interruptBtn').classList.add('hidden');
+    }
+
+    function interruptAI() {
+      const player = document.getElementById('audioPlayer');
+      if (player) {
+        player.pause();
+        player.currentTime = 0;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      onSpeakingEnd();
+    }
+
+    // Voice Input via Web Speech API or Gemini STT
+    function toggleVoiceInput() {
+      if (isRecording) {
+        stopVoiceRecognition();
+      } else {
+        startVoiceRecognition();
+      }
+    }
+
+    function startVoiceRecognition() {
+      interruptAI();
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech Recognition not supported in this browser. Please type your reply.");
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = currentLanguage === 'te' ? 'te-IN' : 'ta-IN';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        document.getElementById('micBtn').classList.add('bg-rose-600', 'mic-recording-pulse');
+        document.getElementById('micStatusNote').textContent = "Listening... Speak in Tamil or Telugu";
+        document.getElementById('micStatusNote').className = "text-[10px] text-center text-rose-400 font-semibold mt-1.5";
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          document.getElementById('chatInput').value = transcript;
+          handleSend();
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.warn("Speech recognition error:", e.error);
+        stopVoiceRecognition();
+      };
+
+      recognition.onend = () => {
+        stopVoiceRecognition();
+      };
+
+      recognition.start();
+    }
+
+    function stopVoiceRecognition() {
+      if (recognition) {
+        try { recognition.stop(); } catch (e) {}
+      }
+      isRecording = false;
+      document.getElementById('micBtn').classList.remove('bg-rose-600', 'mic-recording-pulse');
+      document.getElementById('micStatusNote').textContent = "Tip: Click mic to speak in Tamil or Telugu. You can also paste JSON directly to start a new call.";
+      document.getElementById('micStatusNote').className = "text-[10px] text-center text-slate-500 mt-1.5";
+    }
+
+    // Append Message to Chat Feed
+    function appendMessage(speaker, text, lang = 'ta', audioUrl = null) {
+      const container = document.getElementById('chatMessages');
+      const isAI = speaker === 'AI';
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const langClass = lang === 'te' ? 'lang-te' : 'lang-ta';
+
+      const row = document.createElement('div');
+      row.className = `flex flex-col ${isAI ? 'items-start' : 'items-end'} space-y-1`;
+
+      let audioButton = '';
+      if (isAI) {
+        audioButton = `
+          <button onclick="speakAiResponse('${text.replace(/'/g, "\\'")}', '${lang}', ${audioUrl ? `'${audioUrl}'` : 'null'})" class="ml-2 inline-flex items-center text-amber-400 hover:text-amber-300 text-[11px] font-semibold">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Replay
+          </button>
+        `;
+      }
+
+      row.innerHTML = `
+        <div class="flex items-center space-x-1.5 text-[10px] font-medium text-slate-400">
+          <span class="${isAI ? 'text-amber-400 font-bold' : 'text-sky-400 font-bold'}">${isAI ? 'AI Calling Assistant' : 'You (Lead)'}</span>
+          <span>•</span>
+          <span>${timeStr}</span>
+          ${audioButton}
+        </div>
+        <div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-medium leading-relaxed shadow-lg ${langClass} ${
+          isAI 
+            ? 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-sm' 
+            : 'bg-gradient-to-r from-amber-500 to-rose-600 text-white rounded-tr-sm'
+        }">
+          ${text}
+        </div>
+      `;
+
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendLeadJsonCard(payload) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = "flex justify-center my-2";
+      div.innerHTML = `
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2 text-xs font-mono-code text-slate-300 shadow-md">
+          <span class="text-amber-400 font-bold">Incoming Lead:</span> 
+          <span>mobile: "${payload.mobile}", proid: "${payload.proid}", lang: "${payload.language || 'ta'}"</span>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendStrictOrderPayload(orderPayload) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = "flex justify-center my-3 w-full";
+      div.innerHTML = `
+        <div class="w-full max-w-md bg-emerald-950/60 border border-emerald-500/40 rounded-2xl p-4 shadow-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-1.5 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Purchase Confirmed — Strict Order JSON</span>
+            </div>
+            <button onclick="navigator.clipboard.writeText('${JSON.stringify(orderPayload)}'); alert('Order JSON Copied!');" class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold hover:bg-emerald-500/30">
+              Copy
+            </button>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono-code text-xs text-emerald-300">
+            <pre>${JSON.stringify(orderPayload, null, 2)}</pre>
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateLeadBadge(status) {
+      const badge = document.getElementById('leadStatusBadge');
+      badge.textContent = status || "UNDECIDED";
+      const colors = {
+        'INTERESTED': 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
+        'NOT_INTERESTED': 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
+        'UNDECIDED': 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+        'CALLBACK_REQUESTED': 'bg-sky-500/20 text-sky-400 border border-sky-500/30',
+        'DO_NOT_CALL': 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+      };
+      badge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full ${colors[status] || 'bg-slate-800 text-slate-300'}`;
+    }
+
+    function updateQuickChips() {
+      const bar = document.getElementById('quickChipsBar');
+      bar.innerHTML = '';
+      bar.classList.remove('hidden');
+      bar.classList.add('flex');
+
+      const replies = QUICK_REPLIES[currentLanguage] || QUICK_REPLIES.ta;
+      replies.forEach(txt => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs transition whitespace-nowrap';
+        btn.textContent = txt;
+        btn.onclick = () => {
+          document.getElementById('chatInput').value = txt;
+          handleSend();
+        };
+        bar.appendChild(btn);
+      });
+    }
+  </script>
+</body>
+</html>
