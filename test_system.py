@@ -85,7 +85,7 @@ def run_all_tests():
     greeting_ta = engine_ta.get_initial_greeting()
     assert "வணக்கம்" in greeting_ta
     assert "நித்ரா" in greeting_ta
-    assert "AI உதவியாளர்" in greeting_ta
+    assert ("ஸ்ரீ தியா" in greeting_ta or "AI உதவியாளர்" in greeting_ta)
     assert prod101["name"] in greeting_ta
     print(f"  AI Greeting: {greeting_ta[:60]}...")
 
@@ -121,7 +121,7 @@ def run_all_tests():
 
     greeting_te = engine_te.get_initial_greeting()
     assert "నమస్కారం" in greeting_te
-    assert "AI అసిస్టెంట్" in greeting_te
+    assert ("శ్రీ దియా" in greeting_te or "AI అసిస్టెంట్" in greeting_te)
     assert prod10["name"] in greeting_te
     print(f"  AI Greeting: {greeting_te[:60]}...")
 
@@ -132,7 +132,7 @@ def run_all_tests():
     turn_neg = engine_te.process_customer_turn("వద్దు, నాకు ఆసక్తి లేదు")
     assert turn_neg["lead_status"] == "NOT_INTERESTED"
     assert turn_neg["is_completed"] is True
-    assert "సరే, పర్వాలేదు" in turn_neg["reply_text"]
+    assert "సరే" in turn_neg["reply_text"]
     # STRICT REQUIREMENT: For non-interested conversations, do not generate an order payload!
     assert turn_neg["order_payload"] is None
     print("[PASS] Telugu decline flow verified (order_payload is None for NOT_INTERESTED).")

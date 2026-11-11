@@ -21,8 +21,19 @@ else:
 
 # Gemini AI Key & Models
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_AUDIO_MODEL = os.getenv("GEMINI_AUDIO_MODEL", "gemini-2.0-flash-exp")
+GEMINI_AUDIO_MODEL = os.getenv("GEMINI_AUDIO_MODEL", "gemini-2.5-flash-native-audio-latest")
 GEMINI_VOICE = os.getenv("GEMINI_VOICE", "Aoede")
+
+# Gemini Thinking & Reasoning Model Fallback Chain (Auto-switches when limits are reached)
+GEMINI_THINKING_MODELS = [
+    m.strip()
+    for m in os.getenv(
+        "GEMINI_THINKING_MODELS",
+        "gemini-2.5-flash-lite,gemini-3-flash-preview,gemini-3.1-flash-lite-preview,gemini-3.5-flash-lite,gemini-2.5-flash,gemini-2.5-pro",
+    ).split(",")
+    if m.strip()
+]
+GEMINI_THINKING_BUDGET = int(os.getenv("GEMINI_THINKING_BUDGET", "0"))
 
 # Server configuration
 HOST = os.getenv("HOST", "0.0.0.0")
