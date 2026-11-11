@@ -251,8 +251,29 @@ def run_all_tests():
     assert res3["is_completed"] is False
     print("[PASS] Strict Nithra - sridiya scope verified: unrelated questions politely declined and redirected.")
 
+    # 10. Test Dynamic Self-Learning FAQ Cache (Learn via Gemini -> Serve from Cache next time)
+    print("\n[TEST 10] Dynamic Self-Learning FAQ Cache...")
+    from database import set_cached_faq_answer, get_cached_faq_answer
+    test_q = "மாலையோட முடிச்சு எப்படி போடணும்?"
+    test_ans = "கண்டிப்பாங்க! இந்த கருங்காலி மாலை இயற்கை முறையில் உறுதியான பருத்தி நூலினால் கட்டப்பட்டு இருக்கிறதுங்க."
+    set_cached_faq_answer("PROD101", "ta", test_q, test_ans, source="gemini-2.5-flash-lite")
+
+    engine_faq_cached = LeadConversationEngine(
+        call_id="CALL_FAQ_CACHE_TEST",
+        mobile="9876543210",
+        proid="PROD101",
+        language="ta",
+        product_info=prod101
+    )
+    engine_faq_cached.get_initial_greeting()
+    engine_faq_cached.process_customer_turn("சொல்லுங்க")
+    turn_cached = engine_faq_cached.process_customer_turn(test_q)
+    assert turn_cached["reply_text"] == test_ans, "Must retrieve answer directly from Dynamic FAQ Cache!"
+    print(f"  Cached Reply: {turn_cached['reply_text'][:60]}...")
+    print("[PASS] Dynamic Self-Learning FAQ Cache verified: subsequent turns served from cache.")
+
     print("\n==================================================")
-    print("ALL 9 VERIFICATION SUITES PASSED FLAWLESSLY! [OK]")
+    print("ALL 10 VERIFICATION SUITES PASSED FLAWLESSLY! [OK]")
     print("==================================================")
 
 

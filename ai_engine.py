@@ -158,12 +158,12 @@ class LeadConversationEngine:
         
         if self.language == "te":
             pitch = (
-                f"మన {prod_name} ఆఫర్ ధర {offer_price} రూపాయలు అండి (MRP: {mrp} రూపాయలు). "
+                f"మన {prod_name} ఆఫర్ ధర {offer_price} రూపాయలు అండి. "
                 f"క్యాష్ ఆన్ డెలివరీ కూడా ఉంది. ఈ ప్రొడక్ట్ కొనడానికి మీకు ఆసక్తి ఉందా?"
             )
         else:
             pitch = (
-                f"நம்ம {prod_name} ஆஃபர் விலை {offer_price} ரூபாய்ங்க (MRP: {mrp} ரூபாய்). "
+                f"நம்ம {prod_name} ஆஃபர் விலை {offer_price} ரூபாய்ங்க. "
                 f"கேஷ் ஆன் டெலிவரி வசதியும் உண்டு. இந்த பொருள் வாங்க உங்களுக்கு விருப்பம் இருக்கா?"
             )
         self.state = "PITCH_SENT"
@@ -254,7 +254,20 @@ class LeadConversationEngine:
                 "is_completed": False,
             }
 
-        # 4. Check for verified Product FAQs & semantic questions (Usage, Price, Delivery, Location, Specs)
+        # 4. Check Self-Learning Dynamic FAQ Cache (Answers previously learned from Gemini)
+        from database import get_cached_faq_answer, set_cached_faq_answer
+        cached_dynamic_faq = get_cached_faq_answer(self.proid, self.language, text)
+        if cached_dynamic_faq:
+            print(f"[Dynamic FAQ Cache] Cache HIT for question: '{text}' -> returning learned answer from cache.")
+            self.lead_status = "UNDECIDED"
+            return {
+                "reply_text": cached_dynamic_faq,
+                "lead_status": "UNDECIDED",
+                "order_payload": None,
+                "is_completed": False,
+            }
+
+        # 5. Check for verified Product FAQs & semantic questions (Usage, Price, Delivery, Location, Specs)
         faq_reply = self._check_product_faq(text, cfg)
         if faq_reply:
             self.lead_status = "UNDECIDED"
@@ -265,7 +278,7 @@ class LeadConversationEngine:
                 "is_completed": False,
             }
 
-        # 4. If customer is responding to greeting ("ஆமா", "பேசலாம்", "சொல்லுங்க", "ok", "yes")
+        # 5. If customer is responding to greeting ("ஆமா", "பேசலாம்", "சொல்லுங்க", "ok", "yes")
         if self.state == "GREETING_SENT":
             self.state = "PITCH_SENT"
             pitch = self.get_pitch_prompt()
@@ -276,11 +289,15 @@ class LeadConversationEngine:
                 "is_completed": False,
             }
 
-        # 3. Use Gemini LLM for complex conversational reasoning and Q&A
+        # 6. Use Gemini LLM for complex conversational reasoning and Q&A
         llm_result = self._gemini_process(text)
         new_status = llm_result.get("lead_status", "UNDECIDED")
         reply_text = llm_result.get("reply_text") or cfg["unsure_prompt"]
         is_completed = llm_result.get("is_completed", False)
+
+        # Cache new question & Gemini answer into Dynamic FAQ Cache for next time
+        if new_status == "UNDECIDED" and reply_text and not is_completed:
+            set_cached_faq_answer(self.proid, self.language, text, reply_text, source="gemini")
 
         if new_status in (
             "INTERESTED",
@@ -847,12 +864,23 @@ class LeadConversationEngine:
         }
 
     def _gemini_process(self, customer_text: str) -> Dict[str, Any]:
-        """Calls Gemini with strict grounding, conversational constraints, and model fallback."""
+        """Calls Gemini with strict grounding, conversational constraints, model fallback, and dynamic FAQ caching."""
         cfg = get_language_config(self.language)
         prod_name = self.product_info.get("name", "Product")
         decline_example = cfg.get("out_of_scope_decline", "").format(
             product_name=prod_name
         )
+
+        # 0. Check dynamic FAQ cache first
+        from database import get_cached_faq_answer, set_cached_faq_answer
+        cached_faq = get_cached_faq_answer(self.proid, self.language, customer_text)
+        if cached_faq:
+            print(f"[Dynamic FAQ Cache] Gemini process cache HIT for '{customer_text}' -> using cached answer.")
+            return {
+                "reply_text": cached_faq,
+                "lead_status": "UNDECIDED",
+                "is_completed": False,
+            }
 
         if not config.GEMINI_API_KEY:
             return self._offline_dynamic_answer(customer_text, cfg)
@@ -1238,28 +1266,42 @@ SUPPORTED PRICE INFORMATION:
 
 PRICE RULES:
 
-1. Use the exact verified product price.
+1. INITIAL PITCH RULE:
+   In the initial product pitch or introduction:
+   State ONLY the Offer Price (offer_price). Do NOT state MRP or discount upfront.
+   Tamil Pitch: "நம்ம தயாரிப்பு ஆஃபர் விலை மட்டுமே முதலில் சொல்ல வேண்டும்."
+   Telugu Pitch: "మన ప్రోడక్ట్ ఆఫర్ ధర మాత్రమే మొదట చెప్పాలి."
 
-2. Convert the price into natural spoken words.
+2. DETAILED PRICE ENQUIRY RULE:
+   When the customer specifically asks for rate, price details, or discounts (e.g. "ரேட் என்ன?", "விலை எவ்வளவு?", "ஆஃபர் எவ்ளோ?", "discount இருக்கா?"):
+   Explain the complete price breakdown:
+   - Offer Price (ஆஃபர் விலை)
+   - MRP (எம்.ஆர்.பி விலை)
+   - Verified Discount amount (ஆஃபர் தள்ளுபடி)
+   - Mention Cash on Delivery is available.
 
-3. Clearly distinguish MRP from selling price.
+3. Use the exact verified product price.
 
-4. Clearly explain verified discounts.
+4. Convert the price into natural spoken words.
 
-5. Never invent an offer or discount.
+5. Clearly distinguish MRP from selling price.
 
-6. Never calculate an unverified offer.
+6. Clearly explain verified discounts.
 
-7. If price data is unavailable, politely explain
+7. Never invent an offer or discount.
+
+8. Never calculate an unverified offer.
+
+9. If price data is unavailable, politely explain
    that the team can confirm the price.
 
-8. Do not unnecessarily redirect price questions
+10. Do not unnecessarily redirect price questions
    to the team when verified price is available.
 
-9. If the customer asks only the price,
+11. If the customer asks only the price,
    answer the price directly.
 
-10. Do not provide the entire product description
+12. Do not provide the entire product description
     when the customer only asks for the price.
 
 TAMIL EXAMPLE:
@@ -1993,10 +2035,17 @@ Tamil or Telugu spoken responses.
                 if not reply or "பரவாயில்லைங்க" in reply or "பொருள் பற்றி ஏதாவது சந்தேகம்" in reply or "సందేహం ఉంటే" in reply:
                     offline_fallback = self._offline_dynamic_answer(customer_text, cfg)
                     reply = offline_fallback["reply_text"]
+                lead_status = parsed.get("lead_status", "UNDECIDED")
+                is_completed = bool(parsed.get("is_completed", False))
+
+                # Cache this new question & Gemini answer into Dynamic FAQ Cache for next time
+                if lead_status == "UNDECIDED" and reply and not is_completed:
+                    set_cached_faq_answer(self.proid, self.language, customer_text, reply, source=m)
+
                 return {
                     "reply_text": reply,
-                    "lead_status": parsed.get("lead_status", "UNDECIDED"),
-                    "is_completed": bool(parsed.get("is_completed", False)),
+                    "lead_status": lead_status,
+                    "is_completed": is_completed,
                 }
             except Exception as e:
                 print(

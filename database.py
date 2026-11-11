@@ -5,8 +5,10 @@ and idempotent webhook deduplication in memory without any external database con
 """
 
 import json
+import re
 import datetime
 import threading
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 import config
 
@@ -323,3 +325,196 @@ def list_mongodb_saved_conversations(limit: int = 50) -> List[Dict[str, Any]]:
         items = list(_MONGODB_SAVED_STORE.values())
     items.reverse()
     return [dict(i) for i in items[:limit]]
+
+
+# =====================================================================
+# DYNAMIC SELF-LEARNING FAQ CACHE (Learns from Gemini & Caches for 0ms reuse)
+# =====================================================================
+
+_FAQ_CACHE_FILE = Path("dynamic_faq_cache.json")
+_DYNAMIC_FAQ_CACHE: Dict[str, Dict[str, Any]] = {}
+_FAQ_CACHE_INITIALIZED = False
+
+
+def _normalize_query(q: str) -> str:
+    """Normalizes query text for consistent caching and matching."""
+    if not q:
+        return ""
+    q = q.lower().strip()
+    q = re.sub(r"[?!.,:;'\"`~@#$%^&*()_+=/\\|<>{}\[\]]+", " ", q)
+    return re.sub(r"\s+", " ", q).strip()
+
+
+def _char_ngram_similarity(s1: str, s2: str, n: int = 3) -> float:
+    """Computes character n-gram Jaccard similarity for agglutinative languages like Tamil & Telugu."""
+    s1 = s1.replace(" ", "")
+    s2 = s2.replace(" ", "")
+    if len(s1) < n or len(s2) < n:
+        return 1.0 if s1 == s2 else 0.0
+    ngrams1 = set(s1[i : i + n] for i in range(len(s1) - n + 1))
+    ngrams2 = set(s2[i : i + n] for i in range(len(s2) - n + 1))
+    intersection = len(ngrams1 & ngrams2)
+    union = len(ngrams1 | ngrams2)
+    return intersection / union if union > 0 else 0.0
+
+
+def init_dynamic_faq_cache() -> None:
+    """Loads persistent dynamic FAQ cache from disk file and MongoDB on startup."""
+    global _FAQ_CACHE_INITIALIZED, _DYNAMIC_FAQ_CACHE
+    with _LOCK:
+        if _FAQ_CACHE_INITIALIZED:
+            return
+
+        # 1. Load from local JSON disk backup
+        if _FAQ_CACHE_FILE.exists():
+            try:
+                with open(_FAQ_CACHE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        _DYNAMIC_FAQ_CACHE.update(data)
+                        print(f"[Dynamic FAQ Cache] Loaded {len(data)} cached Q&A pairs from {_FAQ_CACHE_FILE}")
+            except Exception as e:
+                print(f"[Dynamic FAQ Cache] Warning: could not load {_FAQ_CACHE_FILE} ({e})")
+
+        # 2. Sync from MongoDB if reachable
+        col = _get_mongo_collection()
+        if col is not None:
+            try:
+                faq_col = col.database["dynamic_faq_cache"]
+                docs = list(faq_col.find({}, {"_id": 0}))
+                for d in docs:
+                    cache_key = f"{d.get('proid')}:{d.get('language')}:{d.get('normalized_question')}"
+                    _DYNAMIC_FAQ_CACHE[cache_key] = d
+                if docs:
+                    print(f"[Dynamic FAQ Cache] Synced {len(docs)} Q&A pairs from MongoDB collection 'dynamic_faq_cache'")
+            except Exception as e:
+                pass
+
+        _FAQ_CACHE_INITIALIZED = True
+
+
+def get_cached_faq_answer(proid: str, language: str, question: str) -> Optional[str]:
+    """
+    Checks if this question (or semantically identical question) has already been
+    answered by Gemini and stored in the dynamic FAQ cache.
+    Returns the cached answer text, or None if not cached.
+    """
+    init_dynamic_faq_cache()
+    norm_q = _normalize_query(question)
+    if not norm_q or len(norm_q) < 3:
+        return None
+
+    proid_clean = (proid or "").upper().strip()
+    lang_clean = (language or "ta").lower().strip()
+    direct_key = f"{proid_clean}:{lang_clean}:{norm_q}"
+
+    with _LOCK:
+        # 1. Exact normalized match
+        if direct_key in _DYNAMIC_FAQ_CACHE:
+            entry = _DYNAMIC_FAQ_CACHE[direct_key]
+            entry["hit_count"] = entry.get("hit_count", 0) + 1
+            entry["last_accessed_at"] = datetime.datetime.now().isoformat()
+            return entry.get("answer")
+
+        # 2. Fuzzy / N-gram similarity match across cached questions for same product & language
+        best_match = None
+        best_sim = 0.0
+        for key, entry in _DYNAMIC_FAQ_CACHE.items():
+            if entry.get("proid") == proid_clean and entry.get("language") == lang_clean:
+                cached_norm = entry.get("normalized_question", "")
+                sim = _char_ngram_similarity(norm_q, cached_norm, n=3)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_match = entry
+
+        # Threshold for high confidence match
+        if best_match and best_sim >= 0.65:
+            best_match["hit_count"] = best_match.get("hit_count", 0) + 1
+            best_match["last_accessed_at"] = datetime.datetime.now().isoformat()
+            return best_match.get("answer")
+
+    return None
+
+
+def set_cached_faq_answer(
+    proid: str,
+    language: str,
+    question: str,
+    answer: str,
+    source: str = "gemini"
+) -> bool:
+    """
+    Caches a Gemini-generated answer for a new question.
+    Persists in memory, local JSON disk file, and MongoDB.
+    """
+    init_dynamic_faq_cache()
+    norm_q = _normalize_query(question)
+    if not norm_q or len(norm_q) < 3:
+        return False
+
+    clean_ans = (answer or "").strip()
+    if not clean_ans or len(clean_ans) < 10:
+        return False
+
+    # Do not cache fallbacks or generic error prompts
+    if "பரவாயில்லைங்க" in clean_ans and "சந்தேகம் இருந்தா" in clean_ans:
+        return False
+
+    proid_clean = (proid or "").upper().strip()
+    lang_clean = (language or "ta").lower().strip()
+    direct_key = f"{proid_clean}:{lang_clean}:{norm_q}"
+    now = datetime.datetime.now().isoformat()
+
+    doc = {
+        "proid": proid_clean,
+        "language": lang_clean,
+        "original_question": question.strip(),
+        "normalized_question": norm_q,
+        "answer": clean_ans,
+        "source": source,
+        "hit_count": 0,
+        "created_at": now,
+        "last_accessed_at": now
+    }
+
+    with _LOCK:
+        _DYNAMIC_FAQ_CACHE[direct_key] = doc
+        # Save to disk file backup
+        try:
+            with open(_FAQ_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(_DYNAMIC_FAQ_CACHE, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[Dynamic FAQ Cache] Notice: could not persist to disk ({e})")
+
+    # Persist to MongoDB if reachable
+    col = _get_mongo_collection()
+    if col is not None:
+        try:
+            faq_col = col.database["dynamic_faq_cache"]
+            faq_col.update_one(
+                {"proid": proid_clean, "language": lang_clean, "normalized_question": norm_q},
+                {"$set": doc},
+                upsert=True
+            )
+        except Exception as e:
+            pass
+
+    print(f"[Dynamic FAQ Cache] Learned & Cached new answer for '{question}' (proid: {proid_clean}, lang: {lang_clean}) via {source}.")
+    return True
+
+
+def list_cached_faqs(proid: Optional[str] = None, language: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Lists all cached FAQ items learned by the AI assistant."""
+    init_dynamic_faq_cache()
+    proid_clean = (proid or "").upper().strip() if proid else None
+    lang_clean = (language or "").lower().strip() if language else None
+
+    with _LOCK:
+        items = list(_DYNAMIC_FAQ_CACHE.values())
+
+    if proid_clean:
+        items = [i for i in items if i.get("proid") == proid_clean]
+    if lang_clean:
+        items = [i for i in items if i.get("language") == lang_clean]
+
+    return items
