@@ -205,7 +205,18 @@ class LeadConversationEngine:
                 "is_completed": False,
             }
 
-        # 3. If customer is responding to greeting ("ஆமா", "பேசலாம்", "சொல்லுங்க", "ok", "yes")
+        # 3. Check for unrelated, irrelevant or personal questions (Strict Nithra - sridiya Scope)
+        unrelated_reply = self._check_unrelated_query(text, cfg)
+        if unrelated_reply:
+            self.lead_status = "UNDECIDED"
+            return {
+                "reply_text": unrelated_reply,
+                "lead_status": "UNDECIDED",
+                "order_payload": None,
+                "is_completed": False,
+            }
+
+        # 4. If customer is responding to greeting ("ஆமா", "பேசலாம்", "சொல்லுங்க", "ok", "yes")
         if self.state == "GREETING_SENT":
             self.state = "PITCH_SENT"
             pitch = self.get_pitch_prompt()
@@ -420,13 +431,51 @@ class LeadConversationEngine:
 
         return None
 
+    def _check_unrelated_query(self, text: str, cfg: Dict[str, Any]) -> Optional[str]:
+        """
+        Detects unrelated, irrelevant, personal, or unwanted questions outside Nithra - sridiya's scope
+        and politely declines to answer while redirecting to Nithra - sridiya product details.
+        """
+        t = text.lower().strip()
+        prod_name = self.product_info.get("name", "Product")
+        decline_template = cfg.get("out_of_scope_decline", "")
+
+        unrelated_patterns = [
+            # Personal questions
+            "who are you married to", "are you married", "கல்யாணம் ஆயிடுச்சா", "கல்யாணம்", "பெல்லி",
+            "உன் வயசு", "வயது என்ன", "நீ யாரு", "நீங்க யாரு", "నీ వయసు", "how old are you",
+            "where do you live", "எங்க இருக்கீங்க", "எந்த ஊரு", "ఎక్కడ ఉంటారు",
+            "do you have a boyfriend", "do you have a girlfriend", "காதல்", "love pannalama",
+            # General knowledge / politics / news
+            "prime minister", "பிரதமர்", "பிரைம் மினிஸ்டர்", "chief minister", "முதல்வர்",
+            "மோடி", "ஸ்டாலின்", "ரெட்டி", "பவன் கல்யாண்", "தேர்தல்", "election", "vote",
+            "who is the president", "president of india", "குடியரசுத் தலைவர்", "governor",
+            # Weather / Entertainment / Sports
+            "weather today", "வானிலை", "மழை வருமா", "వాతావరణం",
+            "cricket", "கிரிக்கெட்", "ipl", "football", "cinema", "சினிமா", "திரைப்படம்",
+            "movie review", "பாட்டு பாடு", "கவிதை எழுது", "sing a song", "tell me a joke",
+            "ஜோக் சொல்லு", "சமையல் குறிப்பு", "recipe", "share market", "பங்கு சந்தை", "crypto",
+            # Coding / Technical / General AI questions
+            "write code", "python code", "java code", "programming", "essay", "கட்டுரை",
+        ]
+
+        if any(p in t for p in unrelated_patterns):
+            if "{product_name}" in decline_template:
+                return decline_template.format(product_name=prod_name)
+            return decline_template
+
+        return None
+
     def _gemini_process(self, customer_text: str) -> Dict[str, Any]:
         """Calls Gemini with strict grounding, conversational constraints, and model fallback."""
         cfg = get_language_config(self.language)
+        prod_name = self.product_info.get("name", "Product")
+        decline_example = cfg.get("out_of_scope_decline", "").format(product_name=prod_name)
+
         if not config.GEMINI_API_KEY:
             return {
                 "reply_text": cfg["product_pitch_template"].format(
-                    product_name=self.product_info.get("name")
+                    product_name=prod_name
                 ),
                 "lead_status": "UNDECIDED",
                 "is_completed": False,
@@ -446,14 +495,33 @@ class LeadConversationEngine:
         }
 
         system_instruction = f"""
-You are Nithra's professional outbound AI calling assistant.
+You are the professional outbound AI voice calling assistant representing:
+COMPANY & BRAND: Nithra - sridiya (நித்ரா - ஸ்ரீதியா / నిత్రా - శ్రీదియా)
 
-COMPANY:
-Nithra (நித்ரா / నిత్రా)
+==================================================
+MANDATORY SCOPE GUARDRAILS (STRICT ZERO-TOLERANCE)
+==================================================
+
+The assistant MUST respond ONLY to questions related to:
+**Nithra - sridiya, its products, services, and product details.**
+
+STRICT PROHIBITION:
+- DO NOT provide any information outside the approved scope.
+- DO NOT engage in unrelated, irrelevant, personal, or unwanted conversations.
+- DO NOT answer personal questions (e.g. your personal life, age, marriage, feelings, opinions).
+- DO NOT answer questions about general knowledge, politics, politicians, elections, sports, weather, cinema, entertainment, cooking recipes, medical advice, coding, programming, jokes, poetry, or general chit-chat.
+- If the customer asks ANY unrelated, irrelevant, personal, or unwanted question:
+  1. You MUST POLITELY DECLINE to answer.
+  2. You MUST IMMEDIATELY REDIRECT the conversation to Nithra - sridiya related topics (specifically the product: {verified_data.get('name')}).
+  3. Set lead_status = "UNDECIDED"
+  4. Set is_completed = false
+
+Approved Polite Decline & Redirection Phrase:
+"{decline_example}"
 
 CALL PURPOSE:
 You are calling a customer who submitted a product enquiry
-through a Facebook or Instagram lead form.
+through a Facebook or Instagram lead form for {verified_data.get('name')}.
 
 The customer submitted an enquiry only.
 The customer has NOT placed an order.
@@ -1386,6 +1454,7 @@ Set is_completed = false when:
 - Customer asks about discounts.
 - Customer asks about delivery.
 - Customer requests clarification.
+- Customer asks an unrelated, irrelevant, personal, or out-of-scope question (politely decline & redirect to Nithra - sridiya).
 - Customer is still considering.
 - Conversation is ongoing.
 

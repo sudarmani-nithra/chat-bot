@@ -197,8 +197,45 @@ def run_all_tests():
     assert database.is_event_processed(event_id) is True
     print("[PASS] Database operations and webhook idempotency verified.")
 
+    # -------------------------------------------------------------
+    # 9. Strict Scope & Out-of-Scope Question Handling
+    # -------------------------------------------------------------
+    print("\n[TEST 9] Strict Nithra - sridiya Scope & Out-of-Scope Redirection...")
+    engine_scope_ta = LeadConversationEngine(
+        call_id="CALL_SCOPE_TA",
+        mobile="9876543210",
+        proid="PROD101",
+        language="ta",
+        product_info={"name": "கருங்காலி மாலை", "mrp": 1500, "offer_price": 1300}
+    )
+    # Unrelated personal / general knowledge questions
+    res1 = engine_scope_ta.process_customer_turn("இன்னைக்கு மழை வருமா? weather சொல்லுங்க")
+    assert "நித்ரா - ஸ்ரீதியா" in res1["reply_text"] or "Nithra - sridiya" in res1["reply_text"]
+    assert res1["lead_status"] == "UNDECIDED"
+    assert res1["is_completed"] is False
+    assert res1["order_payload"] is None
+
+    res2 = engine_scope_ta.process_customer_turn("உங்களுக்கு கல்யாணம் ஆயிடுச்சா?")
+    assert "நித்ரா - ஸ்ரீதியா" in res2["reply_text"] or "Nithra - sridiya" in res2["reply_text"]
+    assert res2["lead_status"] == "UNDECIDED"
+    assert res2["is_completed"] is False
+
+    # Telugu out-of-scope question
+    engine_scope_te = LeadConversationEngine(
+        call_id="CALL_SCOPE_TE",
+        mobile="9123456789",
+        proid="PROD101",
+        language="te",
+        product_info={"name": "నల్లమద్ది కర్ర", "mrp": 1500, "offer_price": 1100}
+    )
+    res3 = engine_scope_te.process_customer_turn("who is the prime minister of india?")
+    assert "నిత్రా - శ్రీదియా" in res3["reply_text"] or "Nithra - sridiya" in res3["reply_text"]
+    assert res3["lead_status"] == "UNDECIDED"
+    assert res3["is_completed"] is False
+    print("[PASS] Strict Nithra - sridiya scope verified: unrelated questions politely declined and redirected.")
+
     print("\n==================================================")
-    print("ALL 8 VERIFICATION SUITES PASSED FLAWLESSLY! [OK]")
+    print("ALL 9 VERIFICATION SUITES PASSED FLAWLESSLY! [OK]")
     print("==================================================")
 
 

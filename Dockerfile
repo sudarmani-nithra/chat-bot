@@ -3,7 +3,8 @@ FROM python:3.12-slim
 # Prevent Python from writing .pyc files and enable unbuffered logging
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    HOST=0.0.0.0 \
+    PORT=8003
 
 WORKDIR /app
 
@@ -22,9 +23,9 @@ COPY . .
 # Ensure runtime directories exist
 RUN mkdir -p /app/audio_cache /app/static
 
-# Expose default port
-EXPOSE 8000
+# Expose default port from environment
+EXPOSE ${PORT}
 
-# Start server respecting dynamic cloud/local PORT
-CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Load environment variables from .env if present and start server dynamically
+CMD ["sh", "-c", "set -a; [ -f .env ] && . ./.env; set +a; exec uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8003}"]
 

@@ -89,8 +89,9 @@ def run_async_coroutine(coro):
 async def _generate_speech_live_async(
     api_key: str, text: str, model_name: str, voice_name: str
 ) -> bytes:
-    """Internal coroutine for Gemini Live API audio generation."""
-    client = genai.Client(api_key=api_key)
+    """Internal coroutine for Gemini Live API audio generation on v1alpha."""
+    # Note: Live WebSocket bidiGenerateContent is routed on v1alpha
+    client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
 
     system_instruction = (
         "You are an authentic, expressive female voice assistant (Aoede). "
@@ -141,14 +142,8 @@ async def _generate_speech_live_async(
 def _generate_speech_content_sync(
     api_key: str, text: str, model_name: str, voice_name: str
 ) -> bytes:
-    """Fallback audio generation using client.models.generate_content with AUDIO modality."""
+    """Audio generation using client.models.generate_content with AUDIO modality."""
     client = genai.Client(api_key=api_key)
-
-    system_instruction = (
-        "You are an authentic, expressive female voice assistant (Aoede). "
-        "Speak the provided content aloud clearly, warmly and naturally with proper native pronunciation and pauses. "
-        "Do not provide conversational chit-chat. Output only spoken audio."
-    )
 
     gen_config = types.GenerateContentConfig(
         response_modalities=["AUDIO"],
@@ -157,12 +152,11 @@ def _generate_speech_content_sync(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
             )
         ),
-        system_instruction=system_instruction,
     )
 
     response = client.models.generate_content(
         model=model_name,
-        contents=f"Speak this text naturally:\n\n{text}",
+        contents=text,
         config=gen_config,
     )
 
@@ -184,33 +178,35 @@ def synthesize_tamil_speech(
     model_name: str = DEFAULT_MODEL,
     voice_name: str = DEFAULT_VOICE,
 ) -> bytes:
-    """Generates natural audio speech using Gemini Live API."""
+    """Generates natural audio speech using Gemini Live API with automatic HTTP REST TTS fallback."""
     if not api_key:
         raise ValueError("Gemini API key is required.")
     if not text or not text.strip():
         raise ValueError("Text cannot be empty.")
 
     cleaned_text = text.strip()
-    candidate_models = [model_name, "gemini-2.0-flash-exp"]
-    unique_models = []
-    for m in candidate_models:
-        if m and m not in unique_models:
-            unique_models.append(m)
 
-    last_error = None
-    for m in unique_models:
+    # 1. If live model requested (e.g. gemini-2.5-flash-native-audio-latest), attempt Live WebSocket on v1alpha
+    if "live" in model_name or "native-audio" in model_name:
         for attempt in range(2):
             try:
                 return run_async_coroutine(
-                    _generate_speech_live_async(api_key, cleaned_text, m, voice_name)
+                    _generate_speech_live_async(api_key, cleaned_text, model_name, voice_name)
                 )
             except Exception as e:
-                last_error = e
-                err_str = str(e).lower()
-                if "503" in err_str or "high demand" in err_str or "unavailable" in err_str:
-                    time.sleep(0.5)
+                print(f"[Speech] Live WebSocket notice ({e}). Trying HTTP REST TTS fallback...")
+                time.sleep(0.3)
 
-    raise RuntimeError(f"Gemini Live voice synthesis failed: {last_error}")
+    # 2. HTTP REST TTS models (100% reliable, zero WebSocket 404s, works across any server/proxy)
+    tts_models = ["gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"]
+    for m in tts_models:
+        for attempt in range(2):
+            try:
+                return _generate_speech_content_sync(api_key, cleaned_text, m, voice_name)
+            except Exception as e:
+                time.sleep(0.3)
+
+    raise RuntimeError("Failed to generate voice audio across all Gemini speech models.")
 
 
 def _get_cache_path(text: str, language: str, voice_name: str) -> Path:

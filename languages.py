@@ -48,12 +48,10 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "தேதி, நேரம், சதவீதம் போன்றவற்றையும் "
             "தமிழில் இயல்பாகச் சொல்லணும்."
         ),
-        
         # Natural conversational thinking fillers (acknowledges question without silence)
         "thinking_fillers": [
             "ஒரு நிமிஷம், செக் பண்ணி சொல்றேன்.",
             "இருங்க, பார்த்து சொல்றேன்.",
-            "நல்ல கேள்வி, சொல்றேன்.",
             "சரிங்க, பார்த்து சொல்றேன்.",
         ],
         # Initial greeting
@@ -99,6 +97,12 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
         ),
         # Customer is unsure
         "unsure_prompt": ("பரவாயில்லைங்க. பொருள் பற்றி ஏதாவது சந்தேகம் இருந்தா கேளுங்க."),
+        # Out-of-scope / unrelated question polite decline & redirection
+        "out_of_scope_decline": (
+            "மன்னிச்சுக்கோங்க, நான் நித்ரா - ஸ்ரீதியா (Nithra - sridiya) நிறுவனத்தின் தயாரிப்புகள் "
+            "மற்றும் சேவைகள் பற்றிய விவரங்களுக்கு மட்டுமே பதில் அளிக்க முடியும். "
+            "இந்த {product_name} அல்லது எங்கள் தயாரிப்புகள் பற்றி உங்களுக்கு ஏதாவது விவரம் தெரிஞ்சுக்கணுமா?"
+        ),
         # Customer says price is high
         "price_objection": (
             "புரியுதுங்க. "
@@ -144,9 +148,7 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "கேட்டு மேலும் விவரங்கள் தெரிஞ்சுக்கலாம்."
         ),
         # Customer wants callback
-        "callback_prompt": (
-            "கண்டிப்பாங்க! உங்களுக்கு எந்த நேரத்துல பேசினா வசதியா இருக்கும்?"
-        ),
+        "callback_prompt": ("கண்டிப்பாங்க! உங்களுக்கு எந்த நேரத்துல பேசினா வசதியா இருக்கும்?"),
         "callback_closing": (
             "சரிங்க, நீங்க சொன்ன நேரத்துல "
             "எங்க டீம் உங்களைத் தொடர்பு "
@@ -343,6 +345,12 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
         ),
         # Customer unsure
         "unsure_prompt": ("పర్వాలేదు. Product గురించి ఏమైనా సందేహం ఉంటే అడగండి."),
+        # Out-of-scope / unrelated question polite decline & redirection
+        "out_of_scope_decline": (
+            "క్షమించండి అండి, నేను నిత్రా - శ్రీదియా (Nithra - sridiya) ఉత్పత్తులు "
+            "మరియు సేవల వివరాలకు మాత్రమే సమాధానం ఇవ్వగలను. "
+            "ఈ {product_name} లేదా మా ఉత్పత్తుల గురించి మీకు ఏమైనా వివరాలు కావాలా?"
+        ),
         # Price objection
         "price_objection": (
             "అర్థమైంది అండి. "
