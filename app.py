@@ -104,7 +104,9 @@ try:
             "app": "Multilingual AI Voice Assistant",
             "gemini_key_present": bool(config.GEMINI_API_KEY),
             "telephony_provider": config.TELEPHONY_PROVIDER,
-            "database": "in_memory (zero db connection)",
+            "database": "in_memory (zero db connection during active call)",
+            "mongodb_configured": bool(config.MONGODB_URI),
+            "mongodb_db": config.MONGODB_DB_NAME,
         }
 
     # -------------------------------------------------------------
@@ -362,6 +364,9 @@ try:
                     telephony_call_sid=parsed_event.get("provider_call_sid"),
                 )
 
+                if str(new_status).upper() in ("COMPLETED", "BUSY", "NO-ANSWER", "CANCELED", "FAILED"):
+                    database.save_conversation_to_mongodb(call_id)
+
         if event_id:
             database.record_webhook_event(
                 event_id=event_id,
@@ -434,6 +439,11 @@ try:
             order_payload=order_payload,
         )
 
+        mongo_result = None
+        if is_completed:
+            # Store to MongoDB ONLY at the end of the conversation
+            mongo_result = database.save_conversation_to_mongodb(callId)
+
         audio_url = await speech.synthesize_speech_base64_async(
             reply_text, engine.language
         )
@@ -447,7 +457,41 @@ try:
             "order_payload": order_payload,
             "is_completed": is_completed,
             "audio_url": audio_url,
+            "mongo_saved": bool(mongo_result and mongo_result.get("saved")),
         }
+
+    @app.post("/api/voice-leads/calls/{callId}/end", tags=["Voice Simulator"])
+    async def end_voice_lead_call(callId: str):
+        """Explicitly ends the call and saves the final conversation to MongoDB."""
+        call = database.get_call(callId)
+        if not call:
+            parsed = parse_call_id(callId)
+            if parsed:
+                product_data = catalog.get_product(parsed["proid"]) or {}
+                call = database.create_call(
+                    call_id=callId,
+                    mobile=parsed["mobile"],
+                    proid=parsed["proid"],
+                    language=parsed["language"],
+                    is_simulated=True,
+                    product_snapshot=product_data,
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Call ID not found")
+
+        database.update_call_status(call_id=callId, status="COMPLETED")
+        mongo_result = database.save_conversation_to_mongodb(callId)
+        return {
+            "success": True,
+            "callId": callId,
+            "status": "COMPLETED",
+            "mongodb": mongo_result,
+        }
+
+    @app.get("/api/voice-leads/mongodb/conversations", tags=["Voice Leads"])
+    async def list_mongodb_conversations(limit: int = 50):
+        """Lists completed conversations saved to MongoDB."""
+        return database.list_mongodb_saved_conversations(limit=limit)
 
     @app.post("/api/voice-leads/stt", tags=["Speech"])
     async def transcribe_speech(

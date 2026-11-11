@@ -157,3 +157,119 @@ def record_webhook_event(event_id: str, call_id: Optional[str], event_type: str,
             "payload": payload,
             "processed_at": now
         }
+
+
+# Cache of end-of-conversation documents
+_MONGODB_SAVED_STORE: Dict[str, Dict[str, Any]] = {}
+
+
+def save_conversation_to_mongodb(call_id: str) -> Dict[str, Any]:
+    """
+    Saves full conversation details, transcripts, lead status, and order JSON
+    to MongoDB ONLY when the user/call reaches the end of conversation.
+    """
+    call = get_call(call_id)
+    if not call:
+        return {"saved": False, "reason": f"Call ID {call_id} not found"}
+
+    transcript = get_call_transcript(call_id)
+    now = datetime.datetime.now().isoformat()
+    product_snapshot = call.get("product_snapshot") or {}
+    product_name = product_snapshot.get("name") or "Product"
+
+    doc = {
+        "call_id": call_id,
+        "mobile": call.get("mobile"),
+        "proid": call.get("proid"),
+        "product_name": product_name,
+        "language": call.get("language", "ta"),
+        "status": "COMPLETED",
+        "lead_status": call.get("lead_status", "UNDECIDED"),
+        "order_payload": call.get("order_payload"),
+        "is_simulated": call.get("is_simulated", True),
+        "duration_seconds": call.get("duration_seconds", 0),
+        "product_snapshot": product_snapshot,
+        "transcript": transcript,
+        "total_turns": len(transcript),
+        "created_at": call.get("created_at"),
+        "ended_at": now,
+        "saved_to_mongodb_at": now,
+    }
+
+    # Always keep in fast memory cache
+    with _LOCK:
+        _MONGODB_SAVED_STORE[call_id] = doc
+
+    # If MongoDB URI is configured, persist to MongoDB collection
+    mongo_uri = getattr(config, "MONGODB_URI", "")
+    if mongo_uri:
+        try:
+            import pymongo
+            client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=2500)
+            db_name = getattr(config, "MONGODB_DB_NAME", "voice_leads_db")
+            col_name = getattr(config, "MONGODB_COLLECTION", "completed_conversations")
+            col = client[db_name][col_name]
+            res = col.update_one({"call_id": call_id}, {"$set": doc}, upsert=True)
+            print(f"[MongoDB] Successfully saved completed conversation {call_id} to collection '{col_name}'")
+            return {
+                "saved": True,
+                "target": "mongodb",
+                "call_id": call_id,
+                "upserted_id": str(res.upserted_id) if res.upserted_id else None,
+                "document": doc,
+            }
+        except Exception as e:
+            print(f"[MongoDB] Warning: Could not write to MongoDB ({e}). Preserved in memory store.")
+            return {
+                "saved": True,
+                "target": "memory_fallback",
+                "call_id": call_id,
+                "warning": str(e),
+                "document": doc,
+            }
+
+    print(f"[MongoDB] Notice: MONGODB_URI not configured. Completed conversation {call_id} saved in memory.")
+    return {
+        "saved": True,
+        "target": "memory_fallback",
+        "call_id": call_id,
+        "document": doc,
+    }
+
+
+def get_mongodb_saved_conversation(call_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves saved end-of-conversation document from MongoDB or memory cache."""
+    mongo_uri = getattr(config, "MONGODB_URI", "")
+    if mongo_uri:
+        try:
+            import pymongo
+            client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=2500)
+            db_name = getattr(config, "MONGODB_DB_NAME", "voice_leads_db")
+            col_name = getattr(config, "MONGODB_COLLECTION", "completed_conversations")
+            doc = client[db_name][col_name].find_one({"call_id": call_id}, {"_id": 0})
+            if doc:
+                return doc
+        except Exception:
+            pass
+    with _LOCK:
+        doc = _MONGODB_SAVED_STORE.get(call_id)
+        return dict(doc) if doc else None
+
+
+def list_mongodb_saved_conversations(limit: int = 50) -> List[Dict[str, Any]]:
+    """Lists completed conversations saved to MongoDB or memory cache."""
+    mongo_uri = getattr(config, "MONGODB_URI", "")
+    if mongo_uri:
+        try:
+            import pymongo
+            client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=2500)
+            db_name = getattr(config, "MONGODB_DB_NAME", "voice_leads_db")
+            col_name = getattr(config, "MONGODB_COLLECTION", "completed_conversations")
+            cursor = client[db_name][col_name].find({}, {"_id": 0}).sort("ended_at", -1).limit(limit)
+            return list(cursor)
+        except Exception:
+            pass
+    with _LOCK:
+        items = list(_MONGODB_SAVED_STORE.values())
+    items.reverse()
+    return [dict(i) for i in items[:limit]]

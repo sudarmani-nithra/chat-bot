@@ -102,7 +102,7 @@ class LeadConversationEngine:
                 f"{delivery} நாட்களுக்குள் டெலிவரி ஆகிடும். இந்த பொருள் வாங்க விருப்பம் இருக்கா?"
             )
             self.cached_responses["spec"] = (
-                f"நல்ல கேள்வி, சொல்றேன். இந்த {prod_name} முழு விவரம்: {full_spec}. "
+                f"இந்த {prod_name} முழு விவரம்: {full_spec}. "
                 f"இந்த பொருள் வாங்க உங்களுக்கு விருப்பம் இருக்கா?"
             )
             self.cached_responses["pitch"] = "இந்த பொருள் வாங்க உங்களுக்கு விருப்பம் இருக்கா?"

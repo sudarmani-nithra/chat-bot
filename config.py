@@ -29,8 +29,13 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT") or 8000)
 DEBUG = os.getenv("DEBUG", "true").lower() in ("true", "1", "yes")
 
-# Data Store Configuration (Zero DB connection mode - pure in-memory)
+# Data Store Configuration (Zero DB connection during conversation - in-memory live turns)
 DB_MODE = os.getenv("DB_MODE", "in_memory")
+
+# MongoDB Configuration (Only writes completed conversation at the end of call)
+MONGODB_URI = os.getenv("MONGODB_URI", os.getenv("MONGO_URI", ""))
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "voice_leads_db")
+MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "completed_conversations")
 
 # Telephony Configuration
 # Supported providers: 'simulated', 'exotel', 'twilio'
