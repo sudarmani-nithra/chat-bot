@@ -205,6 +205,17 @@ class LeadConversationEngine:
                 "is_completed": False,
             }
 
+        # 2b. Check if customer asks caller identity ("யாரு நீங்க", "who is this")
+        identity_reply = self._check_caller_identity(text, cfg)
+        if identity_reply:
+            self.lead_status = "UNDECIDED"
+            return {
+                "reply_text": identity_reply,
+                "lead_status": "UNDECIDED",
+                "order_payload": None,
+                "is_completed": False,
+            }
+
         # 3. Check for unrelated, irrelevant or personal questions (Strict Nithra - sridiya Scope)
         unrelated_reply = self._check_unrelated_query(text, cfg)
         if unrelated_reply:
@@ -275,38 +286,116 @@ class LeadConversationEngine:
         """Fast keyword check for high-confidence Tamil and Telugu phrases."""
         t = text.lower().strip()
 
-        # Do not call phrases
+        # 1. Do not call phrases
         dnc_keywords = [
             "don't call",
             "dont call",
+            "never call",
+            "stop calling",
+            "remove my number",
+            "delete my number",
             "கால் பண்ணாதீங்க",
             "போன் பண்ணாதீங்க",
             "நம்பர் டெலிட் பண்ணுங்க",
+            "இனிமேல் கூப்பிடாதீங்க",
+            "call pannathinga",
+            "phone pannathinga",
+            "number delete pannunga",
             "ఇక కాల్ చేయవద్దు",
             "ఫోన్ చేయొద్దు",
-            "remove my number",
-            "stop calling",
+            "మళ్లీ కాల్ చేయొద్దు",
+            "malli call cheyoddu",
         ]
         if any(k in t for k in dnc_keywords):
             return "DO_NOT_CALL", cfg["do_not_call_closing"]
 
-        # Call back requested
+        # 2. Call back requested (covers all Tamil, Tanglish, Telugu variations)
         cb_keywords = [
+            # English / Tanglish Callback & Busy
             "call later",
             "call me later",
-            "busy now",
-            "அப்புறம் கூப்பிடுங்க",
+            "call back",
+            "callback",
+            "talk later",
+            "speak later",
+            "busy",
+            "later",
+            "not now",
+            "aprum",
+            "aprom",
+            "aprm",
+            "appuram",
+            "approm",
+            "apram",
+            "kupdunga",
+            "koopidunga",
+            "kupitu",
+            "koopitu",
+            "vera time",
+            "vera neram",
+            "different time",
+            "another time",
+            "naalaiku",
+            "nalaiku",
+            "tomorrow",
+            "driving",
+            "meeting",
+            "office la",
+            "work la",
+            "velaila",
+            "ippo mudiyathu",
+            "ippo pesa mudiyathu",
+            "ippa pesa mudiyathu",
+            "mudiyathu ippo",
+            "not free",
+            "sayangalam",
+            "evening call",
+            # Tamil Script Callback & Busy
+            "அப்புறம்",
+            "அப்றம்",
+            "அப்ரம்",
+            "கூப்பிடுங்க",
+            "பிஸி",
+            "பிசி",
+            "வேற டைம்",
+            "வேற நேரம்",
+            "நாளைக்கு",
             "இப்ப பேச முடியாது",
-            "வேற டைம் கூப்பிடுங்க",
-            "తరువాత కాల్ చేయండి",
+            "இப்போ பேச முடியாது",
+            "இப்ப முடியாது",
+            "இப்போ முடியாது",
+            "வேலையா இருக்கேன்",
+            "வேலை இருக்கு",
+            "டிரைவிங்",
+            "மீட்டிங்",
+            "சாயங்காலம்",
+            "நேரம் இல்ல",
+            "நேரமில்லை",
+            # Telugu Callback & Busy
+            "తరువాత",
+            "తర్వాత",
+            "taruvatha",
+            "tharuvatha",
+            "tharwatha",
+            "రేపు కాల్",
+            "రేపు",
+            "repu",
             "ఇప్పుడు బిజీ",
-            "రేపు కాల్ చేయండి",
-            "evening call pannunga",
+            "బిజీ",
+            "ఇప్పుడు కుదరదు",
+            "కుదరదు",
+            "kudaradhu",
+            "మళ్ళీ కాల్",
+            "మళ్లీ కాల్",
+            "malli call",
+            "తర్వాత మాట్లాడతాను",
+            "సమయం లేదు",
+            "పనిలో ఉన్నాను",
         ]
         if any(k in t for k in cb_keywords):
             return "CALLBACK_REQUESTED", cfg["callback_closing"]
 
-        # Not interested phrases
+        # 3. Not interested phrases (Tamil, Tanglish, Telugu)
         neg_keywords = [
             "வேண்டாம்",
             "விருப்பம் இல்ல",
@@ -317,17 +406,35 @@ class LeadConversationEngine:
             "no interest",
             "don't want",
             "dont want",
+            "don't need",
+            "dont need",
+            "vendam",
+            "vendaam",
+            "venam",
+            "venang",
+            "venanga",
+            "theva illa",
+            "thevai illa",
+            "viruppam illa",
+            "pidikala",
+            "pidikalla",
+            "no thanks",
+            "no thank you",
             "వద్దు",
             "ఇంట్రెస్ట్ లేదు",
             "అవసరం లేదు",
             "కొనను",
-            "no thank you",
-            "no thanks",
+            "వద్దులెండి",
+            "vaddu",
+            "vadhu",
+            "interest ledu",
+            "avsaram ledu",
+            "akkarledu",
         ]
         if any(k in t for k in neg_keywords):
             return "NOT_INTERESTED", cfg["negative_closing"]
 
-        # Strongly interested phrases
+        # 4. Strongly interested phrases
         pos_keywords = [
             "வாங்க விருப்பம் இருக்கு",
             "ஆமா வாங்க விருப்பம் இருக்கு",
@@ -337,12 +444,17 @@ class LeadConversationEngine:
             "கண்டிப்பா வேணும்",
             "yes want to buy",
             "yes i want",
+            "yes order pannunga",
+            "yes i am interested",
+            "order pannunga",
+            "anupunga",
+            "send pannunga",
             "కొనడానికి ఆసక్తి ఉంది",
             "హా కావాలి",
             "ఆర్డర్ చేయండి",
             "హా కొంటాను",
-            "yes order pannunga",
-            "yes i am interested",
+            "order cheyandi",
+            "pampandi",
         ]
         if any(k in t for k in pos_keywords):
             return "INTERESTED", cfg["positive_confirmation"]
@@ -431,6 +543,21 @@ class LeadConversationEngine:
 
         return None
 
+    def _check_caller_identity(self, text: str, cfg: Dict[str, Any]) -> Optional[str]:
+        """Politely introduces Nithra - sridiya when the customer asks who is calling."""
+        t = text.lower().strip()
+        prod_name = self.product_info.get("name", "தயாரிப்பு")
+        identity_patterns = [
+            "யாரு நீங்க", "நீங்க யாரு", "நீ யாரு", "யாரு பேசுறது", "யார் பேசுறது", "எங்கிருந்து கூப்பிடுறீங்க",
+            "எங்கிருந்து பேசுறீங்க", "who are you", "who is this", "who is speaking", "who is calling",
+            "எதுக்காக கூப்பிட்டீங்க", "எதுக்கு கால்", "ఎవరు మీరు", "మీరు ఎవరు", "ఎవరు మాట్లాడుతున్నారు",
+        ]
+        if any(p in t for p in identity_patterns):
+            if self.language == "te":
+                return f"నమస్కారం అండి! మేము నిత్రా - శ్రీదియా (Nithra - sridiya) సంస్థ నుంచి కాల్ చేస్తున్నాము. మా {prod_name} గురించి చెప్పడానికి కాల్ చేశాను. దీని గురించి ఒక నిమిషం మాట్లాడవచ్చా?"
+            return f"வணக்கம்ங்க! நாங்க நித்ரா - ஸ்ரீதியா (Nithra - sridiya) நிறுவனத்திலிருந்து பேசுறோம். நம்ம {prod_name} பத்தி உங்களுக்கு சொல்லத்தான் கூப்பிட்டோம். இதைப் பத்தி ஒரு நிமிஷம் பேசலாங்களா?"
+        return None
+
     def _check_unrelated_query(self, text: str, cfg: Dict[str, Any]) -> Optional[str]:
         """
         Detects unrelated, irrelevant, personal, or unwanted questions outside Nithra - sridiya's scope
@@ -443,7 +570,7 @@ class LeadConversationEngine:
         unrelated_patterns = [
             # Personal questions
             "who are you married to", "are you married", "கல்யாணம் ஆயிடுச்சா", "கல்யாணம்", "பெல்லி",
-            "உன் வயசு", "வயது என்ன", "நீ யாரு", "நீங்க யாரு", "నీ వయసు", "how old are you",
+            "உன் வயசு", "வயது என்ன", "నీ వయసు", "how old are you",
             "where do you live", "எங்க இருக்கீங்க", "எந்த ஊரு", "ఎక్కడ ఉంటారు",
             "do you have a boyfriend", "do you have a girlfriend", "காதல்", "love pannalama",
             # General knowledge / politics / news
@@ -1226,14 +1353,7 @@ TELUGU:
 "తర్వాత మాట్లాడతాను"
 "రేపు కాల్ చేయండి"
 
-If no callback time is specified,
-you may politely ask for a convenient time.
-
-Use:
-{cfg.get('callback_prompt', '')}
-
-When the customer wants to end the call
-and requests a callback:
+When the customer requests a callback, says they are busy, asks to call later, mentions tomorrow, evening, driving, meeting, work, or wants to end the call:
 
 Use:
 {cfg['callback_closing']}
@@ -1243,8 +1363,7 @@ Return:
 lead_status = CALLBACK_REQUESTED
 is_completed = true
 
-Do not say a callback is scheduled
-unless the backend has confirmed it.
+Do NOT pitch the product, do NOT argue, and do NOT keep asking questions. Respect their time and end the call gracefully.
 
 ==================================================
 16. DO NOT CALL REQUEST
@@ -1585,15 +1704,8 @@ Tamil or Telugu spoken responses.
                 print(f"[AI Engine] Error with model {m}: {e}")
                 continue
 
-        # Intelligent product fallback if all LLM API quotas are exhausted
-        prod_name = self.product_info.get("name", "Product")
-        offer_price = int(self.product_info.get("offer_price", 0))
-        mrp = int(self.product_info.get("mrp", 0))
-        if self.language == "te":
-            fallback_text = f"ఈ {prod_name} ఆఫర్ ధర {offer_price} రూపాయలు అండి. క్యాష్ ఆన్ డెలివరీ కూడా ఉంది. ఈ ప్రొడక్ట్ కొనడానికి మీకు ఆసక్తి ఉందా?"
-        else:
-            fallback_text = f"இந்த {prod_name} ஆஃபர் விலை {offer_price} ரூபாய்ங்க (MRP: {mrp} ரூபாய்). Cash on Delivery-யும் இருக்கு. உங்களுக்கு இந்த product வாங்க விருப்பம் இருக்கா?"
-
+        # Polite fallback if all LLM API quotas are exhausted or offline
+        fallback_text = cfg.get("unsure_prompt", "பரவாயில்லைங்க. பொருள் பற்றி ஏதாவது சந்தேகம் இருந்தா கேளுங்க.")
         return {
             "reply_text": fallback_text,
             "lead_status": "UNDECIDED",
