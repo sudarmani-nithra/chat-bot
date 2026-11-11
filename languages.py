@@ -54,11 +54,13 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "இருங்க, பார்த்து சொல்றேன்.",
             "சரிங்க, பார்த்து சொல்றேன்.",
         ],
-        # Initial greeting (Real Sri Diya Telecaller Style)
+        # Initial greeting (Short & crisp: customer can reply naturally without interruption)
         "initial_greeting": (
-            "வணக்கம்ங்க, நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் (நித்ரா தமிழ் காலண்டர்). "
-            "நீங்க பேஸ்புக், இன்ஸ்டாகிராம்ல நம்ம {product_name} பார்த்துட்டு உங்க பேரு, நம்பர் கொடுத்திருக்கீங்க. "
-            "அதைப் பத்தி ஒரு நிமிஷம் பேசலாங்களா?"
+            "வணக்கம் sir, நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் (நித்ரா தமிழ் காலண்டர்)."
+        ),
+        # Lead reason intro (Follow-up context when customer asks "சொல்லுங்க" / "என்ன விஷயம்")
+        "lead_reason_intro": (
+            "சார், நீங்க பேஸ்புக், இன்ஸ்டாகிராம்ல நம்ம {product_name} பார்த்துட்டு விவரங்கள் கேட்டிருந்தீங்க. அதைப் பத்தி சொல்லத்தான் கால் பண்ணோம்."
         ),
         # Store Location Enquiry
         "store_location": (
@@ -183,7 +185,9 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "மறுபடியும் பேசலாமா?"
         ),
         # Customer not interested
-        "negative_closing": ("சரிங்க, நம்மகிட்ட கேஷ் ஆன் டெலிவரி இருக்கு. உங்களுக்கு எப்ப தேவைப்படுதோ அப்ப சொல்லுங்க. ரொம்ப நன்றீங்க!"),
+        "negative_closing": (
+            "சரிங்க, நம்மகிட்ட கேஷ் ஆன் டெலிவரி இருக்கு. உங்களுக்கு எப்ப தேவைப்படுதோ அப்ப சொல்லுங்க. ரொம்ப நன்றீங்க!"
+        ),
         # Customer says they never enquired
         "wrong_lead_response": (
             "ஓ, சரிங்க. "
@@ -324,11 +328,13 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "ఉండండి, చూసి చెప్తాను.",
             "సరే అండి, చూసి చెప్తాను.",
         ],
-        # Initial greeting (Real Sri Diya Telecaller Style)
+        # Initial greeting (Short & crisp)
         "initial_greeting": (
-            "నమస్కారం అండి, మేము శ్రీ దియా పూజా స్టోర్ నుంచి మాట్లాడుతున్నాము (నిత్రా కేలండర్). "
-            "మీరు ఫేస్‌బుక్ లేదా ఇన్‌స్టాగ్రామ్‌లో మన {product_name} చూసి మీ వివరాలు ఇచ్చారు. "
-            "దాని గురించి ఒక నిమిషం మాట్లాడవచ్చా అండి?"
+            "నమస్కారం అండి, మేము శ్రీ దియా పూజా స్టోర్ నుంచి మాట్లాడుతున్నాము (నిత్రా కేలండర్)."
+        ),
+        # Lead reason intro (Follow-up context when customer asks "చెప్పండి")
+        "lead_reason_intro": (
+            "అండి, మీరు ఫేస్‌బుక్ లేదా ఇన్‌స్టాగ్రామ్‌లో మన {product_name} చూసి వివరాలు అడిగారు. దాని గురించి చెప్పడానికే కాల్ చేశాము."
         ),
         # Store Location Enquiry
         "store_location": (
@@ -453,7 +459,9 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "మళ్లీ కాల్ చేయవచ్చా?"
         ),
         # Negative response
-        "negative_closing": ("సరే అండి, మన దగ్గర క్యాష్ ఆన్ డెలివరీ ఉంది. మీకు ఎప్పుడు అవసరం అనిపించినా చెప్పండి. చాలా ధన్యవాదాలు అండి!"),
+        "negative_closing": (
+            "సరే అండి, మన దగ్గర క్యాష్ ఆన్ డెలివరీ ఉంది. మీకు ఎప్పుడు అవసరం అనిపించినా చెప్పండి. చాలా ధన్యవాదాలు అండి!"
+        ),
         # Wrong lead
         "wrong_lead_response": (
             "ఓహ్, సరే అండి. "

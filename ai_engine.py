@@ -94,6 +94,15 @@ class LeadConversationEngine:
             self.cached_responses["quality"] = cfg.get("quality_assurance", "ఖచ్చితంగా అండి, మన ప్రోడక్ట్స్ అన్నీ 100% ఒరిజినల్ మరియు చాలా క్వాలిటీగా ఉంటాయి.")
             self.cached_responses["not_applied"] = cfg.get("not_applied_objection", "మేము ఆర్డర్ చేశారని అనట్లేదండి. వివరాలు కావాలని నంబర్ ఇచ్చారు, అవసరమైతే బుక్ చేద్దామా అని కనుక్కోవడానికి కాల్ చేశాము.")
             self.cached_responses["ask_friend"] = cfg.get("ask_friend_or_family", "సరే అండి, నేను మీకు వాట్సాప్‌లో వివరాలు, ఫోటోలు పంపిస్తాను. మీరు చూసి చెప్పండి.")
+            usage_sentences_te = [
+                s.strip() for s in sentences
+                if any(w in s for w in ["ధరించ", "పూజ", "ఉంచ", "వాడ", "ఉపయోగించ"])
+            ]
+            usage_info_te = ". ".join(usage_sentences_te[:2]) if usage_sentences_te else f"ఈ {prod_name}ను మీ పూజా గదిలో ఉంచి ఇష్టదైవాన్ని పూజించి ఉపయోగించవచ్చు"
+            self.cached_responses["usage"] = (
+                f"ఈ {prod_name} ఎలా ఉపయోగించాలంటే: {usage_info_te}. "
+                f"రోజూ దీన్ని ఉపయోగించవచ్చు లేదా ధరించవచ్చు అండి. ఈ ప్రొడక్ట్ కొనడానికి మీకు ఆసక్తి ఉందా?"
+            )
         else:
             self.cached_responses["price"] = (
                 f"இருங்க, பார்த்து சொல்றேன். இந்த {prod_name} விலை {offer_price} ரூபாய்ங்க. "
@@ -118,6 +127,15 @@ class LeadConversationEngine:
             self.cached_responses["quality"] = cfg.get("quality_assurance", "கண்டிப்பாங்க, நம்ம ப்ராடக்ட் எல்லாமே 100% ஒரிஜினல் மற்றும் மிகத் தரமான முறையில்தான் கொடுக்கிறோம்.")
             self.cached_responses["not_applied"] = cfg.get("not_applied_objection", "நாங்க ஆர்டர்னு சொல்லலைங்க. நீங்க பேஸ்புக், இன்ஸ்டாவுல பார்த்துட்டு விவரங்கள் வேணும்னு நம்பர் கொடுத்திருந்தீங்க, அதான் புக் பண்ணிக்கலாமான்னு கேட்க கூப்பிட்டோம்.")
             self.cached_responses["ask_friend"] = cfg.get("ask_friend_or_family", "சரிங்க, நான் உங்களுக்கு வாட்ஸ்அப்ல இந்த பொருள் பற்றிய முழு விவரங்களும், போட்டோஸும் அனுப்பி வைக்கிறேன். நீங்க பார்த்துட்டு சொல்லுங்க.")
+            usage_sentences = [
+                s.strip() for s in sentences
+                if any(w in s for w in ["பயன்படுத்த", "அணி", "வழிப", "பூஜை", "வைக்க", "இட்டு", "போட்டு", "எடுத்து"])
+            ]
+            usage_info = ". ".join(usage_sentences[:2]) if usage_sentences else f"இந்த {prod_name}-ஐ நீங்க பூஜை அறையில வச்சு குலதெய்வத்தை நினைத்து வணங்கி பயன்படுத்தலாம்"
+            self.cached_responses["usage"] = (
+                f"இந்த {prod_name}-ஐ எப்படி பயன்படுத்தணும்னா: {usage_info}. "
+                f"தினமும் நீங்க இதை பயன்படுத்தலாம், ரொம்ப விசேஷமானதுங்க. இந்த பொருள் வாங்க உங்களுக்கு விருப்பம் இருக்கா?"
+            )
 
     def get_initial_greeting(self) -> str:
         """Generates opening disclosure greeting mentioning product name according to specification."""
@@ -132,10 +150,24 @@ class LeadConversationEngine:
         return greeting
 
     def get_pitch_prompt(self) -> str:
-        """Generates the direct product pitch."""
+        """Generates the direct product pitch including actual product details."""
         cfg = get_language_config(self.language)
         prod_name = self.product_info.get("name", "Product")
-        pitch = cfg["product_pitch_template"].format(product_name=prod_name)
+        offer_price = int(self.product_info.get("offer_price", 0))
+        mrp = int(self.product_info.get("mrp", 0))
+        
+        if self.language == "te":
+            pitch = (
+                f"అండి, మీరు ఫేస్‌బుక్ లేదా ఇన్‌స్టాగ్రామ్‌లో మన {prod_name} చూసి వివరాలు అడిగారు. "
+                f"దీని ఆఫర్ ధర {offer_price} రూపాయలు అండి (MRP: {mrp} రూపాయలు). "
+                f"క్యాష్ ఆన్ డెలివరీ కూడా ఉంది. ఈ ప్రొడక్ట్ కొనడానికి మీకు ఆసక్తి ఉందా?"
+            )
+        else:
+            pitch = (
+                f"சார், நீங்க பேஸ்புக், இன்ஸ்டாகிராம்ல நம்ம {prod_name} பார்த்துட்டு விவரங்கள் கேட்டிருந்தீங்க. "
+                f"அதோட ஆஃபர் விலை {offer_price} ரூபாய்ங்க (MRP: {mrp} ரூபாய்). "
+                f"கேஷ் ஆன் டெலிவரி வசதியும் உண்டு. இந்த பொருள் வாங்க உங்களுக்கு விருப்பம் இருக்கா?"
+            )
         self.state = "PITCH_SENT"
         return pitch
 
@@ -559,6 +591,7 @@ class LeadConversationEngine:
             "spec",
             "specification",
             "விவரம்",
+            "விவரங்கள்",
             "பலன்",
             "நன்மை",
             "benefits",
@@ -575,15 +608,49 @@ class LeadConversationEngine:
             "அகலம்",
             "height",
             "width",
+            # Spoken Tamil & Tanglish for "tell about product"
+            "product pathi",
+            "product patri",
+            "porul pathi",
+            "porul patri",
+            "pathi sollu",
+            "patri sollu",
+            "பத்தி சொல்லு",
+            "பற்றி சொல்லு",
+            "விவரம் சொல்லு",
+            "விவரங்கள் சொல்லு",
+            "என்ன பொருள்",
+            "என்ன ப்ராடக்ட்",
+            "ப்ராடக்ட் பத்தி",
+            "பொருள் பத்தி",
+            "பத்தி",
+            "பற்றி",
+            "details sollunga",
+            "details sollu",
+            "விவரம் என்ன",
             "వివరాలు",
             "లాభాలు",
             "ప్రయోజనాలు",
             "పూసలు",
             "పరిమాణం",
             "బరువు",
+            "ప్రొడక్ట్ గురించి",
+            "వివరాలు చెప్పు",
         ]
         if any(k in t for k in spec_keywords):
             return self.cached_responses.get("spec")
+
+        # 8. How to use / Usage instructions enquiry ("ஹவ் டு யூஸ்", "how to use", "எப்படி பயன்படுத்துறது")
+        usage_keywords = [
+            "ஹவ் டு யூஸ்", "how to use", "use panrathu", "use pananum", "use panradhu",
+            "யூஸ் பண்றது", "யூஸ் பண்ணனும்", "யூஸ் பண்ண", "யூஸ்", "use",
+            "எப்படி பயன்படுத்துவது", "எப்படி பயன்படுத்தணும்", "பயன்படுத்துவது எப்படி", "பயன்படுத்தும் முறை",
+            "எப்படி அணியணும்", "எப்படி போடணும்", "எப்படி வைக்கணும்", "எப்படி வழிபடணும்",
+            "அணியும் முறை", "வழிபடும் முறை", "எப்படி யூஸ்",
+            "ఎలా వాడాలి", "ఎలా ఉపయోగించాలి", "ఎలా ధరించాలి", "వాడే విధానం", "హౌ టు యూస్"
+        ]
+        if any(k in t for k in usage_keywords):
+            return self.cached_responses.get("usage")
 
         return None
 
@@ -612,7 +679,7 @@ class LeadConversationEngine:
         if any(p in t for p in identity_patterns):
             if self.language == "te":
                 return f"నమస్కారం అండి! మేము శ్రీ దియా పూజా స్టోర్ నుంచి మాట్లాడుతున్నాము (నిత్రా కేలండర్). మన {prod_name} గురించి చెప్పడానికి కాల్ చేశాను. దీని గురించి ఒక నిమిషం మాట్లాడవచ్చా అండి?"
-            return f"வணக்கம் Sir! நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் (நித்ரா தமிழ் காலண்டர்). நம்ம {prod_name} பத்தி உங்களுக்கு சொல்லத்தான் கூப்பிட்டோம். இதைப் பத்தி ஒரு நிமிஷம் பேசலாங்களா?"
+            return f"வணக்கம் Sir! நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் நித்ரா தமிழ் காலண்டர். நம்ம {prod_name} பத்தி உங்களுக்கு சொல்லத்தான் கூப்பிட்டோம். இதைப் பத்தி ஒரு நிமிஷம் பேசலாங்களா?"
         return None
 
     def _check_unrelated_query(self, text: str, cfg: Dict[str, Any]) -> Optional[str]:

@@ -86,11 +86,11 @@ def run_all_tests():
     assert "வணக்கம்" in greeting_ta
     assert "நித்ரா" in greeting_ta
     assert ("ஸ்ரீ தியா" in greeting_ta or "AI உதவியாளர்" in greeting_ta)
-    assert prod101["name"] in greeting_ta
     print(f"  AI Greeting: {greeting_ta[:60]}...")
 
     # Customer agrees to speak
     pitch_ta = engine_ta.get_pitch_prompt()
+    assert prod101["name"] in pitch_ta
     assert "விருப்பம் இருக்கா" in pitch_ta
     print(f"  AI Pitch: {pitch_ta[:60]}...")
 
@@ -122,10 +122,10 @@ def run_all_tests():
     greeting_te = engine_te.get_initial_greeting()
     assert "నమస్కారం" in greeting_te
     assert ("శ్రీ దియా" in greeting_te or "AI అసిస్టెంట్" in greeting_te)
-    assert prod10["name"] in greeting_te
     print(f"  AI Greeting: {greeting_te[:60]}...")
 
     pitch_te = engine_te.get_pitch_prompt()
+    assert prod10["name"] in pitch_te
     assert "ఆసక్తి ఉందా" in pitch_te
 
     # Customer declines
