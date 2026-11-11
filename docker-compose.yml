@@ -1,4 +1,25 @@
 services:
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASS:-adminpassword123}
+      MONGO_INITDB_DATABASE: ${MONGODB_DB_NAME:-dialer_diya}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - dialer-net
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand({ping: 1})' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   ai-voice-assistant:
     build:
       context: .
@@ -10,16 +31,32 @@ services:
       - "${PORT:-8003}:${PORT:-8003}"
     env_file:
       - .env
+    environment:
+      - PORT=${PORT:-8003}
+      - HOST=0.0.0.0
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASS:-adminpassword123}@mongodb:27017/${MONGODB_DB_NAME:-dialer_diya}?authSource=admin
     dns:
       - 8.8.8.8
       - 8.8.4.4
     volumes:
       - ./:/app
       - ./audio_cache:/app/audio_cache
+    depends_on:
+      mongodb:
+        condition: service_started
+    networks:
+      - dialer-net
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${PORT:-8003}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  dialer-net:
+    driver: bridge

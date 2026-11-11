@@ -548,9 +548,22 @@ class LeadConversationEngine:
         t = text.lower().strip()
         prod_name = self.product_info.get("name", "தயாரிப்பு")
         identity_patterns = [
-            "யாரு நீங்க", "நீங்க யாரு", "நீ யாரு", "யாரு பேசுறது", "யார் பேசுறது", "எங்கிருந்து கூப்பிடுறீங்க",
-            "எங்கிருந்து பேசுறீங்க", "who are you", "who is this", "who is speaking", "who is calling",
-            "எதுக்காக கூப்பிட்டீங்க", "எதுக்கு கால்", "ఎవరు మీరు", "మీరు ఎవరు", "ఎవరు మాట్లాడుతున్నారు",
+            "யாரு நீங்க",
+            "நீங்க யாரு",
+            "நீ யாரு",
+            "யாரு பேசுறது",
+            "யார் பேசுறது",
+            "எங்கிருந்து கூப்பிடுறீங்க",
+            "எங்கிருந்து பேசுறீங்க",
+            "who are you",
+            "who is this",
+            "who is speaking",
+            "who is calling",
+            "எதுக்காக கூப்பிட்டீங்க",
+            "எதுக்கு கால்",
+            "ఎవరు మీరు",
+            "మీరు ఎవరు",
+            "ఎవరు మాట్లాడుతున్నారు",
         ]
         if any(p in t for p in identity_patterns):
             if self.language == "te":
@@ -569,21 +582,70 @@ class LeadConversationEngine:
 
         unrelated_patterns = [
             # Personal questions
-            "who are you married to", "are you married", "கல்யாணம் ஆயிடுச்சா", "கல்யாணம்", "பெல்லி",
-            "உன் வயசு", "வயது என்ன", "నీ వయసు", "how old are you",
-            "where do you live", "எங்க இருக்கீங்க", "எந்த ஊரு", "ఎక్కడ ఉంటారు",
-            "do you have a boyfriend", "do you have a girlfriend", "காதல்", "love pannalama",
+            "who are you married to",
+            "are you married",
+            "கல்யாணம் ஆயிடுச்சா",
+            "கல்யாணம்",
+            "பெல்லி",
+            "உன் வயசு",
+            "வயது என்ன",
+            "నీ వయసు",
+            "how old are you",
+            "where do you live",
+            "எங்க இருக்கீங்க",
+            "எந்த ஊரு",
+            "ఎక్కడ ఉంటారు",
+            "do you have a boyfriend",
+            "do you have a girlfriend",
+            "காதல்",
+            "love pannalama",
             # General knowledge / politics / news
-            "prime minister", "பிரதமர்", "பிரைம் மினிஸ்டர்", "chief minister", "முதல்வர்",
-            "மோடி", "ஸ்டாலின்", "ரெட்டி", "பவன் கல்யாண்", "தேர்தல்", "election", "vote",
-            "who is the president", "president of india", "குடியரசுத் தலைவர்", "governor",
+            "prime minister",
+            "பிரதமர்",
+            "பிரைம் மினிஸ்டர்",
+            "chief minister",
+            "முதல்வர்",
+            "மோடி",
+            "ஸ்டாலின்",
+            "ரெட்டி",
+            "பவன் கல்யாண்",
+            "தேர்தல்",
+            "election",
+            "vote",
+            "who is the president",
+            "president of india",
+            "குடியரசுத் தலைவர்",
+            "governor",
             # Weather / Entertainment / Sports
-            "weather today", "வானிலை", "மழை வருமா", "వాతావరణం",
-            "cricket", "கிரிக்கெட்", "ipl", "football", "cinema", "சினிமா", "திரைப்படம்",
-            "movie review", "பாட்டு பாடு", "கவிதை எழுது", "sing a song", "tell me a joke",
-            "ஜோக் சொல்லு", "சமையல் குறிப்பு", "recipe", "share market", "பங்கு சந்தை", "crypto",
+            "weather today",
+            "வானிலை",
+            "மழை வருமா",
+            "వాతావరణం",
+            "cricket",
+            "கிரிக்கெட்",
+            "ipl",
+            "football",
+            "cinema",
+            "சினிமா",
+            "திரைப்படம்",
+            "movie review",
+            "பாட்டு பாடு",
+            "கவிதை எழுது",
+            "sing a song",
+            "tell me a joke",
+            "ஜோக் சொல்லு",
+            "சமையல் குறிப்பு",
+            "recipe",
+            "share market",
+            "பங்கு சந்தை",
+            "crypto",
             # Coding / Technical / General AI questions
-            "write code", "python code", "java code", "programming", "essay", "கட்டுரை",
+            "write code",
+            "python code",
+            "java code",
+            "programming",
+            "essay",
+            "கட்டுரை",
         ]
 
         if any(p in t for p in unrelated_patterns):
@@ -597,7 +659,9 @@ class LeadConversationEngine:
         """Calls Gemini with strict grounding, conversational constraints, and model fallback."""
         cfg = get_language_config(self.language)
         prod_name = self.product_info.get("name", "Product")
-        decline_example = cfg.get("out_of_scope_decline", "").format(product_name=prod_name)
+        decline_example = cfg.get("out_of_scope_decline", "").format(
+            product_name=prod_name
+        )
 
         if not config.GEMINI_API_KEY:
             return {
@@ -1705,7 +1769,10 @@ Tamil or Telugu spoken responses.
                 continue
 
         # Polite fallback if all LLM API quotas are exhausted or offline
-        fallback_text = cfg.get("unsure_prompt", "பரவாயில்லைங்க. பொருள் பற்றி ஏதாவது சந்தேகம் இருந்தா கேளுங்க.")
+        fallback_text = cfg.get(
+            "unsure_prompt",
+            "அதைப் பத்தின தகவல் இப்போ என்கிட்ட இல்லீங்க. பொருளைப் பத்தி ஏதாவது கேட்கணுமா?",
+        )
         return {
             "reply_text": fallback_text,
             "lead_status": "UNDECIDED",

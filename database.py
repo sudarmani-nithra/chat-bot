@@ -161,28 +161,67 @@ def record_webhook_event(event_id: str, call_id: Optional[str], event_type: str,
 
 # Cache of end-of-conversation documents
 _MONGODB_SAVED_STORE: Dict[str, Dict[str, Any]] = {}
+_CACHED_MONGO_COL = None
 
 
 def _get_mongo_collection():
-    """Gets MongoDB database and collection safely using URI or default database."""
+    """Gets MongoDB database and collection safely using URI or resilient fallback hosts."""
+    global _CACHED_MONGO_COL
+    if _CACHED_MONGO_COL is not None:
+        try:
+            _CACHED_MONGO_COL.database.client.admin.command("ping")
+            return _CACHED_MONGO_COL
+        except Exception:
+            _CACHED_MONGO_COL = None
+
     mongo_uri = getattr(config, "MONGODB_URI", "")
     if not mongo_uri:
         return None
-    try:
-        import pymongo
-        client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=3000)
+
+    import pymongo
+
+    # Candidate URIs to try (original, docker container host, and localhost)
+    candidate_uris = [mongo_uri]
+
+    # Docker network hostname <-> Localhost mapping
+    if "@mongodb:" in mongo_uri:
+        candidate_uris.append(mongo_uri.replace("@mongodb:", "@localhost:"))
+    elif "@localhost:" in mongo_uri:
+        candidate_uris.append(mongo_uri.replace("@localhost:", "@mongodb:"))
+    elif "@127.0.0.1:" in mongo_uri:
+        candidate_uris.append(mongo_uri.replace("@127.0.0.1:", "@mongodb:"))
+
+    # Add default docker container and local fallback URIs
+    root_user = getattr(config, "MONGO_ROOT_USER", "admin")
+    root_pass = getattr(config, "MONGO_ROOT_PASS", "adminpassword123")
+    db_name_cfg = getattr(config, "MONGODB_DB_NAME", "dialer_diya")
+    docker_fallback = f"mongodb://{root_user}:{root_pass}@mongodb:27017/{db_name_cfg}?authSource=admin"
+    local_fallback = f"mongodb://{root_user}:{root_pass}@localhost:27017/{db_name_cfg}?authSource=admin"
+
+    for fb in (docker_fallback, local_fallback):
+        if fb not in candidate_uris:
+            candidate_uris.append(fb)
+
+    for uri in candidate_uris:
         try:
-            db = client.get_default_database()
+            client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
+            client.admin.command("ping")
+            try:
+                db = client.get_default_database()
+            except Exception:
+                db = None
+            if db is None:
+                db = client[db_name_cfg]
+            col_name = getattr(config, "MONGODB_COLLECTION", "voice_leads_db")
+            _CACHED_MONGO_COL = db[col_name]
+            clean_host = uri.split("@")[-1] if "@" in uri else uri
+            print(f"[MongoDB] Successfully connected to {db.name}.{col_name} via {clean_host}")
+            return _CACHED_MONGO_COL
         except Exception:
-            db = None
-        if db is None:
-            db_name = getattr(config, "MONGODB_DB_NAME", "nithrabhoomi")
-            db = client[db_name]
-        col_name = getattr(config, "MONGODB_COLLECTION", "completed_conversations")
-        return db[col_name]
-    except Exception as e:
-        print(f"[MongoDB] Connection error: {e}")
-        return None
+            continue
+
+    print("[MongoDB] Notice: Could not connect to any MongoDB instance. Using in-memory fallback.")
+    return None
 
 
 def save_conversation_to_mongodb(call_id: str) -> Dict[str, Any]:

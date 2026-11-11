@@ -144,6 +144,23 @@ def run_all_tests():
     assert res_cb["lead_status"] == "CALLBACK_REQUESTED"
     assert res_cb["order_payload"] is None
 
+    # Tanglish callback directly after greeting ("aprum kupitu", "aprum kupdunga")
+    engine_cb2 = LeadConversationEngine("CALL_CB2", "9876543210", "PROD101", "ta", prod101)
+    engine_cb2.get_initial_greeting()
+    res_cb2 = engine_cb2.process_customer_turn("aprum kupitu")
+    assert res_cb2["lead_status"] == "CALLBACK_REQUESTED"
+    assert res_cb2["is_completed"] is True
+    assert res_cb2["order_payload"] is None
+    assert "சரிங்க" in res_cb2["reply_text"]
+    assert "விலை" not in res_cb2["reply_text"]  # MUST NOT PITCH PRODUCT
+
+    engine_cb3 = LeadConversationEngine("CALL_CB3", "9876543210", "PROD101", "ta", prod101)
+    engine_cb3.get_initial_greeting()
+    res_cb3 = engine_cb3.process_customer_turn("aprum kupdunga")
+    assert res_cb3["lead_status"] == "CALLBACK_REQUESTED"
+    assert res_cb3["is_completed"] is True
+    assert res_cb3["order_payload"] is None
+
     engine_dnc = LeadConversationEngine("CALL_DNC", "9876543210", "PROD101", "ta", prod101)
     res_dnc = engine_dnc.process_customer_turn("இனிமேல் கால் பண்ணாதீங்க, remove my number")
     assert res_dnc["lead_status"] == "DO_NOT_CALL"

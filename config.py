@@ -33,9 +33,11 @@ DEBUG = os.getenv("DEBUG", "true").lower() in ("true", "1", "yes")
 DB_MODE = os.getenv("DB_MODE", "in_memory")
 
 # MongoDB Configuration (Only writes completed conversation at the end of call)
+MONGO_ROOT_USER = os.getenv("MONGO_ROOT_USER", os.getenv("MONGO_INITDB_ROOT_USERNAME", "admin"))
+MONGO_ROOT_PASS = os.getenv("MONGO_ROOT_PASS", os.getenv("MONGO_INITDB_ROOT_PASSWORD", "adminpassword123"))
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "dialer_diya")
+MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "voice_leads_db")
 MONGODB_URI = os.getenv("MONGODB_URI", os.getenv("MONGO_URI", ""))
-MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "voice_leads_db")
-MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "completed_conversations")
 
 # Telephony Configuration
 # Supported providers: 'simulated', 'exotel', 'twilio'
