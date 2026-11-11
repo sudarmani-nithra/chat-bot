@@ -234,18 +234,7 @@ class LeadConversationEngine:
                     "is_completed": True,
                 }
 
-        # 2. Check for common verified Product FAQs (Price, Delivery, COD, Benefits)
-        faq_reply = self._check_product_faq(text, cfg)
-        if faq_reply:
-            self.lead_status = "UNDECIDED"
-            return {
-                "reply_text": faq_reply,
-                "lead_status": "UNDECIDED",
-                "order_payload": None,
-                "is_completed": False,
-            }
-
-        # 2b. Check if customer asks caller identity ("யாரு நீங்க", "who is this")
+        # 2. Check if customer asks caller identity ("யாரு நீங்க", "who is this", "edhukaga call")
         identity_reply = self._check_caller_identity(text, cfg)
         if identity_reply:
             self.lead_status = "UNDECIDED"
@@ -262,6 +251,17 @@ class LeadConversationEngine:
             self.lead_status = "UNDECIDED"
             return {
                 "reply_text": unrelated_reply,
+                "lead_status": "UNDECIDED",
+                "order_payload": None,
+                "is_completed": False,
+            }
+
+        # 4. Check for verified Product FAQs & semantic questions (Usage, Price, Delivery, Location, Specs)
+        faq_reply = self._check_product_faq(text, cfg)
+        if faq_reply:
+            self.lead_status = "UNDECIDED"
+            return {
+                "reply_text": faq_reply,
                 "lead_status": "UNDECIDED",
                 "order_payload": None,
                 "is_completed": False,
@@ -474,8 +474,20 @@ class LeadConversationEngine:
         if any(k in t for k in neg_keywords):
             return "NOT_INTERESTED", cfg["negative_closing"]
 
-        # 4. Strongly interested phrases
+        # 4. Strongly interested / buying phrases
+        # Guard: if customer is asking for photos or WhatsApp, it is NOT an order yet
+        if any(w in t for w in ["photo", "போட்டோ", "whatsapp", "வாட்ஸ்அப்", "வாட்சப்", "படம்"]):
+            return None, None
+
         pos_keywords = [
+            "வாங்குறேன்",
+            "வாங்கிக்கிறேன்",
+            "புக் பண்ணுங்க",
+            "book பண்ணுங்க",
+            "book pannunga",
+            "பார்சல் அனுப்புங்க",
+            "பொருள் அனுப்புங்க",
+            "கொரியர் பண்ணுங்க",
             "வாங்க விருப்பம் இருக்கு",
             "ஆமா வாங்க விருப்பம் இருக்கு",
             "ஆமா வேணும்",
@@ -487,14 +499,17 @@ class LeadConversationEngine:
             "yes order pannunga",
             "yes i am interested",
             "order pannunga",
-            "anupunga",
-            "send pannunga",
+            "parcel anupunga",
+            "கொடுங்க",
+            "கொடுங்க சார்",
+            "కొంటాను",
+            "ఆర్డర్ చేయండి",
+            "బుక్ చేయండి",
             "కొనడానికి ఆసక్తి ఉంది",
             "హా కావాలి",
-            "ఆర్డర్ చేయండి",
             "హా కొంటాను",
             "order cheyandi",
-            "pampandi",
+            "పార్సెల్ పంపండి",
         ]
         if any(k in t for k in pos_keywords):
             return "INTERESTED", cfg["positive_confirmation"]
@@ -502,155 +517,128 @@ class LeadConversationEngine:
         return None, None
 
     def _check_product_faq(self, text: str, cfg: Dict[str, Any]) -> Optional[str]:
-        """Directly answers common product questions (price, delivery, benefits) using verified data."""
+        """
+        Directly and semantically answers product questions (usage, wearing, price,
+        delivery, specs, benefits, store location, quality, objections) using verified catalog data.
+        Supports Tamil script, Telugu script, Tanglish, Tenglish, and English.
+        """
         t = text.lower().strip()
-        prod_name = self.product_info.get("name", "Product")
-        mrp = int(self.product_info.get("mrp", 0))
-        offer_price = int(self.product_info.get("offer_price", 0))
-        discount = int(self.product_info.get("discount", 0))
-        delivery = self.product_info.get("delivery_time", "2 to 4")
 
-        # 1. Price enquiry
-        price_keywords = [
-            "விலை",
-            "விலை என்ன",
-            "விலை எவ்வளவு",
-            "ரேட்",
-            "ரேட் என்ன",
-            "rate",
-            "price",
-            "cost",
-            "how much",
-            "எவ்ளோ",
-            "amount",
-            "ధర",
-            "ధర ఎంత",
-            "రేటు",
-            "రేటు ఎంత",
-            "ఖరీదు",
-            "కాస్ట్",
-        ]
-        if any(k in t for k in price_keywords):
+        # 1. How to use / Usage / Wearing instructions / Worship / Rules
+        usage_regex = (
+            r"(\bhow\s+to\s+use\b|ஹவ்\s*டு\s*யூஸ்|\buse\b|யூஸ்|பயன்ப|அணி|போட|போடு|வைக்க|வழிப|பூஜை|"
+            r"வாட|ధరిం|ఉపయో|ఎలా\s*వాడ|\bwear\b|who\s*can|who\s*should|who\s*all|யாரெல்லாம்|ladies|gents|women|men|பெண்கள்|"
+            r"ஆண்கள்|குழந்தைகள்|குளி|bath|அசைவம்|non[-\s]?veg|தீட்டு|முறை|epdi\s*pod|epdi\s*use|"
+            r"edhuku|ethuku|எதற்கு|எதுக்கு)"
+        )
+        if re.search(usage_regex, t, re.IGNORECASE):
+            return self.cached_responses.get("usage")
+
+        # 2. Price / Offer / Discount enquiry
+        price_regex = (
+            r"(\bprice\b|\brate\b|\bcost\b|\bamount\b|how\s*much|evlo|எவ்ளோ|விலை|ரேட்|காசு|பணம்|"
+            r"ధర|రేటు|ఖరీదు|காஸ்ட்|ஆஃபர்|\boffer\b|\bdiscount\b|டிஸ்கவுண்ட்|தள்ளுபடி|kammi|குறைக்க|குறைச்சு)"
+        )
+        if re.search(price_regex, t, re.IGNORECASE):
             return self.cached_responses.get("price")
 
-        # 2. Delivery / COD enquiry
-        deliv_keywords = [
-            "டெலிவரி",
-            "எப்போ வரும்",
-            "எத்தனை நாள்",
-            "delivery",
-            "cod",
-            "cash on delivery",
-            "கையில",
-            "డెలివరీ",
-            "ఎప్పుడు వస్తుంది",
-            "ఎన్ని రోజులు",
-            "క్యాష్ ఆన్ డెలివరీ",
-        ]
-        if any(k in t for k in deliv_keywords):
+        # 3. Delivery / COD / Courier / Shipping enquiry
+        delivery_regex = (
+            r"(\bdelivery\b|\bcod\b|cash\s*on\s*delivery|\bcourier\b|\bpost\b|\bshipping\b|"
+            r"டெலிவரி|கொரியர்|போஸ்ட்|எப்போ\s*வரும்|எத்தனை\s*நாள்|கைக்கு|டோர்|சார்ஜ்|\bcharge\b|"
+            r"\bcharges\b|\breach\b|\bdays\b|நேர்ல|டோர்\s*டெலிவரி|డెలివరీ|క్యాష్\s*ఆన్\s*డెలివరీ)"
+        )
+        if re.search(delivery_regex, t, re.IGNORECASE):
             return self.cached_responses.get("delivery")
 
-        # 3. Store location enquiry (Namakkal, Tiruchengode)
-        location_keywords = [
-            "எங்க இருக்கு", "எங்கிருந்து பேசுறீங்க", "எங்கிருந்து கூப்பிடுறீங்க", "ஷாப் எங்க", "ஸ்டோர் எங்க",
-            "கடை எங்க", "shop எங்க", "store எங்க", "address", "முகவரி", "shop address", "store address",
-            "ఎక్కడ ఉంది", "షాప్ ఎక్కడ", "మీ షాప్", "మీ స్టోర్", "location", "store location"
-        ]
-        if any(k in t for k in location_keywords):
+        # 4. Store location enquiry (Namakkal, Tiruchengode)
+        location_regex = (
+            r"(\blocation\b|\baddress\b|\bstore\b|\bshop\b|கடை|ஸ்டோர்|ஷாப்|ஊர்|முகவரி|"
+            r"எங்க\s*இருக்கு|எங்கிருந்து|enga\s*irukku|enga\s*irunthu|திருச்செங்கோடு|நாமக்கல்|"
+            r"நேர்ல\s*வரலாமா|எங்க\s*பாக்குறது|நேர்ல\s*வாங்கலாமா|ఎక్కడ\s*ఉంది|షాప్\s*ఎక్కడ|అడ్రస్)"
+        )
+        if re.search(location_regex, t, re.IGNORECASE):
             return self.cached_responses.get("location")
 
-        # 4. Quality & Originality enquiry ("ஒரிஜினலா?", "Quality-ah?")
-        quality_keywords = [
-            "ஒரிஜினலா", "original", "quality", "குவாலிட்டி", "உண்மையானதா", "ஒரிஜினல் தானா", "நம்பலாமா",
-            "உண்மைதானா", "duplicate", "ఒరిజినల్", "క్వాలిటీ", "నిజమైనదా"
-        ]
-        if any(k in t for k in quality_keywords):
+        # 5. Quality & Originality enquiry ("ஒரிஜினலா?", "Quality-ah?")
+        quality_regex = (
+            r"(\boriginal\b|\bquality\b|\bduplicate\b|\bfake\b|\bguarantee\b|ஒரிஜினல்|அசல்|"
+            r"குவாலிட்டி|உண்மையான|நம்பலாமா|தரமான|ஒரிஜினலா|உண்மைதானா|ఒరిజినల్|క్వాలిటీ|నిజమైన)"
+        )
+        if re.search(quality_regex, t, re.IGNORECASE):
             return self.cached_responses.get("quality")
 
-        # 5. Customer says they didn't order / enquiry clarification
-        not_applied_keywords = [
-            "நான் கேக்கல", "நான் ஆர்டர் பண்ணல", "நான் எதுவும் குடுக்கல", "ஆர்டர் பண்ணல",
-            "நான் பாக்கல", "did not order", "didn't order", "not ordered", "நா ஆர்டர் பண்ணல",
-            "நேను ఆర్డర్ చేయలేదు", "నేను అడగలేదు"
-        ]
-        if any(k in t for k in not_applied_keywords):
+        # 6. Customer says they didn't order / enquiry clarification
+        not_applied_regex = (
+            r"(didn\'?t\s*order|not\s*ordered|did\s*not\s*order|order\s*pan[a-z]*\s*(illa|ila|illaye)|"
+            r"naan\s*kekala|ஆர்டர்\s*பண்ணல|ஆர்டர்\s*போடல|கேக்கல|பாக்கல|நா\s*ஆர்டர்|நான்\s*ஆர்டர்|நேను\s*ఆర్డర్\s*చేయలేదు)"
+        )
+        if re.search(not_applied_regex, t, re.IGNORECASE):
             return self.cached_responses.get("not_applied")
 
-        # 6. Customer wants to consult friend/family or wants WhatsApp photos
-        ask_friend_keywords = [
-            "பிரெண்ட்கிட்ட", "பிரண்ட் கிட்ட", "வீட்ல கேட்டு", "வீட்ல சொல்லிட்டு", "கேட்டு சொல்றேன்",
-            "wife கிட்ட", "அப்பாகிட்ட", "கேட்டுட்டு சொல்றேன்", "whatsapp", "வாட்ஸ்அப்", "வாட்சப்",
-            "போட்டோ அனுப்புங்க", "போட்டோஸ் அனுப்புங்க", "photo anupunga", "whatsapp pannunga",
-            "ఫోటో పంపండి", "వాట్సాప్", "ఇంట్లో అడిగి", "ఫ్రెండ్‌ని అడిగి"
-        ]
-        if any(k in t for k in ask_friend_keywords):
+        # 7. Customer wants to consult friend/family or wants WhatsApp photos
+        ask_friend_regex = (
+            r"(\bwhatsapp\b|வாட்ஸ்அப்|வாட்சப்|வாட்சாப்|\bphoto\b|\bphotos\b|போட்டோ|போட்டோஸ்|"
+            r"வீட்ல|மனைவி|\bwife\b|அப்பா|\bfamily\b|\bfriends?\b|கேட்டு\s*சொல்றேன்|யோசிச்சு|ఫోటో|వాట్సాప్)"
+        )
+        if re.search(ask_friend_regex, t, re.IGNORECASE):
             return self.cached_responses.get("ask_friend")
 
-        # 7. Product specifications, benefits & details enquiry
-        spec_keywords = [
-            "spec",
-            "specification",
-            "விவரம்",
-            "விவரங்கள்",
-            "பலன்",
-            "நன்மை",
-            "benefits",
-            "details",
-            "மணிகள்",
-            "beads",
-            "அளவு",
-            "size",
-            "எடை",
-            "weight",
-            "மில்லிமீட்டர்",
-            "mm",
-            "உயரம்",
-            "அகலம்",
-            "height",
-            "width",
-            # Spoken Tamil & Tanglish for "tell about product"
-            "product pathi",
-            "product patri",
-            "porul pathi",
-            "porul patri",
-            "pathi sollu",
-            "patri sollu",
-            "பத்தி சொல்லு",
-            "பற்றி சொல்லு",
-            "விவரம் சொல்லு",
-            "விவரங்கள் சொல்லு",
-            "என்ன பொருள்",
-            "என்ன ப்ராடக்ட்",
-            "ப்ராடக்ட் பத்தி",
-            "பொருள் பத்தி",
-            "பத்தி",
-            "பற்றி",
-            "details sollunga",
-            "details sollu",
-            "விவரம் என்ன",
-            "వివరాలు",
-            "లాభాలు",
-            "ప్రయోజనాలు",
-            "పూసలు",
-            "పరిమాణం",
-            "బరువు",
-            "ప్రొడక్ట్ గురించి",
-            "వివరాలు చెప్పు",
-        ]
-        if any(k in t for k in spec_keywords):
+        # 8. Product specifications, benefits & details enquiry
+        spec_regex = (
+            r"(\bspec\b|\bspecs\b|\bdetails\b|\bbenefits?\b|பலன்|நன்மை|விவர|மணி|manigal|mani|"
+            r"\bbead\b|\bbeads\b|அளவு|சைஸ்|\bsize\b|எடை|\bweight\b|மில்லி|\bmm\b|height|width|"
+            r"உயரம்|அகலம்|மரம்|\bwood\b|பத்தி|patri|pathi|என்ன\s*பொருள்|என்ன\s*ப்ராடக்ட்|விவரங்கள்|"
+            r"விவரம்|விபரம்|விபரங்கள்|వివరాలు|లాభాలు|గురించి)"
+        )
+        if re.search(spec_regex, t, re.IGNORECASE):
             return self.cached_responses.get("spec")
 
-        # 8. How to use / Usage instructions enquiry ("ஹவ் டு யூஸ்", "how to use", "எப்படி பயன்படுத்துறது")
-        usage_keywords = [
-            "ஹவ் டு யூஸ்", "how to use", "use panrathu", "use pananum", "use panradhu",
-            "யூஸ் பண்றது", "யூஸ் பண்ணனும்", "யூஸ் பண்ண", "யூஸ்", "use",
-            "எப்படி பயன்படுத்துவது", "எப்படி பயன்படுத்தணும்", "பயன்படுத்துவது எப்படி", "பயன்படுத்தும் முறை",
-            "எப்படி அணியணும்", "எப்படி போடணும்", "எப்படி வைக்கணும்", "எப்படி வழிபடணும்",
-            "அணியும் முறை", "வழிபடும் முறை", "எப்படி யூஸ்",
-            "ఎలా వాడాలి", "ఎలా ఉపయోగించాలి", "ఎలా ధరించాలి", "వాడే విధానం", "హౌ టు యూస్"
-        ]
-        if any(k in t for k in usage_keywords):
-            return self.cached_responses.get("usage")
+        # 9. Dynamic sentence search in product description for specific features
+        matched_sentence = self._search_product_description(t)
+        if matched_sentence:
+            return matched_sentence
+
+        return None
+
+    def _search_product_description(self, customer_text: str) -> Optional[str]:
+        """
+        Dynamically finds the best matching sentence from the verified product description
+        based on token overlap with customer utterance.
+        """
+        desc = self.product_info.get("description", "")
+        if not desc:
+            return None
+        clean_desc = re.sub(r"[\U00010000-\U0010ffff]|[\u2600-\u27bf]", "", desc).strip()
+        sentences = [s.strip() for s in re.split(r"[.!?\n]", clean_desc) if len(s.strip()) > 10]
+        if not sentences:
+            return None
+
+        # Extract meaningful tokens
+        q_words = set(w.lower() for w in re.findall(r"\w+", customer_text) if len(w) > 2)
+        stopwords = {
+            "this", "product", "the", "and", "for", "with", "what", "how", "inga", "unga",
+            "inna", "enna", "irukku", "sollu", "sollunga", "solra", "solunga", "solren",
+            "pannu", "pannunga", "varum", "irukka"
+        }
+        q_words = q_words - stopwords
+        if not q_words:
+            return None
+
+        best_s = None
+        best_score = 0
+        for s in sentences:
+            s_words = set(w.lower() for w in re.findall(r"\w+", s))
+            overlap = len(q_words & s_words)
+            if overlap > best_score:
+                best_score = overlap
+                best_s = s
+
+        if best_s and best_score >= 1:
+            prod_name = self.product_info.get("name", "தயாரிப்பு")
+            if self.language == "te":
+                return f"ఖచ్చితంగా అండి! మన {prod_name} గురించి చెప్పాలంటే: {best_s}. ఈ ప్రొడక్ట్ కొనడానికి మీకు ఆసక్తి ఉందా?"
+            return f"கண்டிப்பாங்க! நம்ம {prod_name} பத்தி சொல்லணும்னா: {best_s}. இந்த பொருள் வாங்க உங்களுக்கு விருப்பம் இருக்கா?"
 
         return None
 
@@ -672,6 +660,16 @@ class LeadConversationEngine:
             "who is calling",
             "எதுக்காக கூப்பிட்டீங்க",
             "எதுக்கு கால்",
+            "எதுக்கு call",
+            "edhukaga call",
+            "edhuku call",
+            "ethuku call",
+            "call vanthuchu",
+            "call vanthiruku",
+            "phone vanthuchu",
+            "missed call",
+            "call பண்ணீங்க",
+            "enaku call vanthuchu",
             "ఎవరు మీరు",
             "మీరు ఎవరు",
             "ఎవరు మాట్లాడుతున్నారు",
@@ -766,6 +764,90 @@ class LeadConversationEngine:
 
         return None
 
+    def _offline_dynamic_answer(self, customer_text: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Intelligent offline & fallback responder.
+        Dynamically extracts answers from verified catalog data,
+        product specifications, usage instructions, delivery, pricing,
+        and store details without needing external LLM API calls.
+        """
+        # 1. Check intent (buying, declining, callback, dnc)
+        detected_intent, fast_reply = self._fast_intent_check(customer_text, cfg)
+        if detected_intent:
+            if detected_intent == "INTERESTED":
+                return {
+                    "reply_text": fast_reply or cfg["positive_confirmation"],
+                    "lead_status": "INTERESTED",
+                    "is_completed": True,
+                }
+            elif detected_intent == "NOT_INTERESTED":
+                return {
+                    "reply_text": fast_reply or cfg["negative_closing"],
+                    "lead_status": "NOT_INTERESTED",
+                    "is_completed": True,
+                }
+            elif detected_intent == "DO_NOT_CALL":
+                return {
+                    "reply_text": fast_reply or cfg["do_not_call_closing"],
+                    "lead_status": "DO_NOT_CALL",
+                    "is_completed": True,
+                }
+            elif detected_intent == "CALLBACK_REQUESTED":
+                return {
+                    "reply_text": fast_reply or cfg["callback_closing"],
+                    "lead_status": "CALLBACK_REQUESTED",
+                    "is_completed": True,
+                }
+
+        # 2. Check FAQ / Semantic topics (usage, price, delivery, location, quality, specs, objections)
+        faq_reply = self._check_product_faq(customer_text, cfg)
+        if faq_reply:
+            return {
+                "reply_text": faq_reply,
+                "lead_status": "UNDECIDED",
+                "is_completed": False,
+            }
+
+        # 3. Check caller identity ("who are you", "why calling")
+        identity_reply = self._check_caller_identity(customer_text, cfg)
+        if identity_reply:
+            return {
+                "reply_text": identity_reply,
+                "lead_status": "UNDECIDED",
+                "is_completed": False,
+            }
+
+        # 4. Check out of scope
+        unrelated_reply = self._check_unrelated_query(customer_text, cfg)
+        if unrelated_reply:
+            return {
+                "reply_text": unrelated_reply,
+                "lead_status": "UNDECIDED",
+                "is_completed": False,
+            }
+
+        # 5. Search specific sentence in product description
+        sentence_reply = self._search_product_description(customer_text)
+        if sentence_reply:
+            return {
+                "reply_text": sentence_reply,
+                "lead_status": "UNDECIDED",
+                "is_completed": False,
+            }
+
+        # 6. Friendly, proactive guidance (NEVER the dismissive unsure_prompt!)
+        prod_name = self.product_info.get("name", "தயாரிப்பு")
+        if self.language == "te":
+            helpful_text = f"తప్పకుండా అండి! మన {prod_name} గురించి మీకు ఏ వివరాలు కావాలి? ధర, వాడే విధానం లేదా డెలివరీ గురించి చెప్పమంటారా?"
+        else:
+            helpful_text = f"கண்டிப்பாங்க! நம்ம {prod_name} பத்தி உங்களுக்கு என்ன விவரம் தெரிஞ்சுக்கணும்? விலை, பயன்பாடு அல்லது டெலிவரி பத்தி சொல்லட்டுங்களா?"
+
+        return {
+            "reply_text": helpful_text,
+            "lead_status": "UNDECIDED",
+            "is_completed": False,
+        }
+
     def _gemini_process(self, customer_text: str) -> Dict[str, Any]:
         """Calls Gemini with strict grounding, conversational constraints, and model fallback."""
         cfg = get_language_config(self.language)
@@ -775,13 +857,7 @@ class LeadConversationEngine:
         )
 
         if not config.GEMINI_API_KEY:
-            return {
-                "reply_text": cfg["product_pitch_template"].format(
-                    product_name=prod_name
-                ),
-                "lead_status": "UNDECIDED",
-                "is_completed": False,
-            }
+            return self._offline_dynamic_answer(customer_text, cfg)
 
         client = genai.Client(api_key=config.GEMINI_API_KEY)
         lang_name = "Telugu" if self.language == "te" else "Tamil"
@@ -1444,7 +1520,22 @@ Do not pressure the customer.
 Do not continue selling after a clear refusal.
 
 ==================================================
-13. CUSTOMER UNDECIDED
+13. CUSTOMER QUESTIONS AND UNDECIDED
+==================================================
+
+CRITICAL RULE FOR ALL CUSTOMER QUESTIONS:
+When the customer asks ANY question about the product, usage, how to wear, who can wear, specifications, price, discounts, delivery, shop location, originality, or traditional benefits (in Tamil script, English, or phonetic Tanglish/Tenglish):
+1. ALWAYS answer their specific question directly, warmly, and politely in 1 to 2 spoken sentences using the verified product information and Sridiya Pooja Store details.
+2. NEVER use the generic unsure prompt ("பரவாயில்லைங்க. பொருள் பற்றி ஏதாவது சந்தேகம் இருந்தா கேளுங்க.") when the customer has asked a question!
+3. After answering the question, politely follow up:
+   Tamil: "இந்த பொருள் உங்களுக்கு புக் பண்ணிக்கலாங்களா சார்?"
+   Telugu: "ఈ ప్రొడక్ట్ మీకు బుక్ చేయమంటారా అండి?"
+4. Set:
+   lead_status = "UNDECIDED"
+   is_completed = false
+
+==================================================
+13B. CUSTOMER UNDECIDED (ONLY WHEN NOT ASKING QUESTIONS)
 ==================================================
 
 If the customer is unsure:
@@ -1899,8 +1990,13 @@ Tamil or Telugu spoken responses.
                 clean_json = re.sub(r"```$", "", clean_json, flags=re.MULTILINE).strip()
                 parsed = json.loads(clean_json)
                 print(f"[AI Engine] Response successfully generated by model '{m}'")
+                reply = (parsed.get("reply_text") or "").strip()
+                # If LLM returned empty or repetitive unsure prompt while customer asked a question:
+                if not reply or "பரவாயில்லைங்க" in reply or "பொருள் பற்றி ஏதாவது சந்தேகம்" in reply or "సందేహం ఉంటే" in reply:
+                    offline_fallback = self._offline_dynamic_answer(customer_text, cfg)
+                    reply = offline_fallback["reply_text"]
                 return {
-                    "reply_text": parsed.get("reply_text", cfg["unsure_prompt"]),
+                    "reply_text": reply,
                     "lead_status": parsed.get("lead_status", "UNDECIDED"),
                     "is_completed": bool(parsed.get("is_completed", False)),
                 }
@@ -1910,13 +2006,5 @@ Tamil or Telugu spoken responses.
                 )
                 continue
 
-        # Polite fallback if all LLM API quotas are exhausted or offline
-        fallback_text = cfg.get(
-            "unsure_prompt",
-            "அதைப் பத்தின தகவல் இப்போ என்கிட்ட இல்லீங்க. பொருளைப் பத்தி ஏதாவது கேட்கணுமா?",
-        )
-        return {
-            "reply_text": fallback_text,
-            "lead_status": "UNDECIDED",
-            "is_completed": False,
-        }
+        # Smart dynamic fallback if all LLM API quotas are exhausted or offline
+        return self._offline_dynamic_answer(customer_text, cfg)
