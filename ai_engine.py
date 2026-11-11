@@ -90,6 +90,10 @@ class LeadConversationEngine:
                 "positive_confirmation"
             ]
             self.cached_responses["negative_closing"] = cfg["negative_closing"]
+            self.cached_responses["location"] = cfg.get("store_location", "మా స్టోర్ నమక్కల్ జిల్లా, తిరుచెంగోడ్‌లో ఉంది అండి. వస్తువులు ఇక్కడి నుంచే పంపుతాము.")
+            self.cached_responses["quality"] = cfg.get("quality_assurance", "ఖచ్చితంగా అండి, మన ప్రోడక్ట్స్ అన్నీ 100% ఒరిజినల్ మరియు చాలా క్వాలిటీగా ఉంటాయి.")
+            self.cached_responses["not_applied"] = cfg.get("not_applied_objection", "మేము ఆర్డర్ చేశారని అనట్లేదండి. వివరాలు కావాలని నంబర్ ఇచ్చారు, అవసరమైతే బుక్ చేద్దామా అని కనుక్కోవడానికి కాల్ చేశాము.")
+            self.cached_responses["ask_friend"] = cfg.get("ask_friend_or_family", "సరే అండి, నేను మీకు వాట్సాప్‌లో వివరాలు, ఫోటోలు పంపిస్తాను. మీరు చూసి చెప్పండి.")
         else:
             self.cached_responses["price"] = (
                 f"இருங்க, பார்த்து சொல்றேன். இந்த {prod_name} விலை {offer_price} ரூபாய்ங்க. "
@@ -110,6 +114,10 @@ class LeadConversationEngine:
                 "positive_confirmation"
             ]
             self.cached_responses["negative_closing"] = cfg["negative_closing"]
+            self.cached_responses["location"] = cfg.get("store_location", "நம்ம நாமக்கல் மாவட்டம் திருச்செங்கோடுங்க. பொருள் இங்கிருந்துதான் கொரியர் மற்றும் போஸ்ட் ஆபீஸ் வழியா நேரடியா வருது.")
+            self.cached_responses["quality"] = cfg.get("quality_assurance", "கண்டிப்பாங்க, நம்ம ப்ராடக்ட் எல்லாமே 100% ஒரிஜினல் மற்றும் மிகத் தரமான முறையில்தான் கொடுக்கிறோம்.")
+            self.cached_responses["not_applied"] = cfg.get("not_applied_objection", "நாங்க ஆர்டர்னு சொல்லலைங்க. நீங்க பேஸ்புக், இன்ஸ்டாவுல பார்த்துட்டு விவரங்கள் வேணும்னு நம்பர் கொடுத்திருந்தீங்க, அதான் புக் பண்ணிக்கலாமான்னு கேட்க கூப்பிட்டோம்.")
+            self.cached_responses["ask_friend"] = cfg.get("ask_friend_or_family", "சரிங்க, நான் உங்களுக்கு வாட்ஸ்அப்ல இந்த பொருள் பற்றிய முழு விவரங்களும், போட்டோஸும் அனுப்பி வைக்கிறேன். நீங்க பார்த்துட்டு சொல்லுங்க.")
 
     def get_initial_greeting(self) -> str:
         """Generates opening disclosure greeting mentioning product name according to specification."""
@@ -510,7 +518,43 @@ class LeadConversationEngine:
         if any(k in t for k in deliv_keywords):
             return self.cached_responses.get("delivery")
 
-        # 3. Product specifications, benefits & details enquiry
+        # 3. Store location enquiry (Namakkal, Tiruchengode)
+        location_keywords = [
+            "எங்க இருக்கு", "எங்கிருந்து பேசுறீங்க", "எங்கிருந்து கூப்பிடுறீங்க", "ஷாப் எங்க", "ஸ்டோர் எங்க",
+            "கடை எங்க", "shop எங்க", "store எங்க", "address", "முகவரி", "shop address", "store address",
+            "ఎక్కడ ఉంది", "షాప్ ఎక్కడ", "మీ షాప్", "మీ స్టోర్", "location", "store location"
+        ]
+        if any(k in t for k in location_keywords):
+            return self.cached_responses.get("location")
+
+        # 4. Quality & Originality enquiry ("ஒரிஜினலா?", "Quality-ah?")
+        quality_keywords = [
+            "ஒரிஜினலா", "original", "quality", "குவாலிட்டி", "உண்மையானதா", "ஒரிஜினல் தானா", "நம்பலாமா",
+            "உண்மைதானா", "duplicate", "ఒరిజినల్", "క్వాలిటీ", "నిజమైనదా"
+        ]
+        if any(k in t for k in quality_keywords):
+            return self.cached_responses.get("quality")
+
+        # 5. Customer says they didn't order / enquiry clarification
+        not_applied_keywords = [
+            "நான் கேக்கல", "நான் ஆர்டர் பண்ணல", "நான் எதுவும் குடுக்கல", "ஆர்டர் பண்ணல",
+            "நான் பாக்கல", "did not order", "didn't order", "not ordered", "நா ஆர்டர் பண்ணல",
+            "நேను ఆర్డర్ చేయలేదు", "నేను అడగలేదు"
+        ]
+        if any(k in t for k in not_applied_keywords):
+            return self.cached_responses.get("not_applied")
+
+        # 6. Customer wants to consult friend/family or wants WhatsApp photos
+        ask_friend_keywords = [
+            "பிரெண்ட்கிட்ட", "பிரண்ட் கிட்ட", "வீட்ல கேட்டு", "வீட்ல சொல்லிட்டு", "கேட்டு சொல்றேன்",
+            "wife கிட்ட", "அப்பாகிட்ட", "கேட்டுட்டு சொல்றேன்", "whatsapp", "வாட்ஸ்அப்", "வாட்சப்",
+            "போட்டோ அனுப்புங்க", "போட்டோஸ் அனுப்புங்க", "photo anupunga", "whatsapp pannunga",
+            "ఫోటో పంపండి", "వాట్సాప్", "ఇంట్లో అడిగి", "ఫ్రెండ్‌ని అడిగి"
+        ]
+        if any(k in t for k in ask_friend_keywords):
+            return self.cached_responses.get("ask_friend")
+
+        # 7. Product specifications, benefits & details enquiry
         spec_keywords = [
             "spec",
             "specification",
@@ -567,8 +611,8 @@ class LeadConversationEngine:
         ]
         if any(p in t for p in identity_patterns):
             if self.language == "te":
-                return f"నమస్కారం అండి! మేము నిత్రా - శ్రీదియా (Nithra - sridiya) సంస్థ నుంచి కాల్ చేస్తున్నాము. మా {prod_name} గురించి చెప్పడానికి కాల్ చేశాను. దీని గురించి ఒక నిమిషం మాట్లాడవచ్చా?"
-            return f"வணக்கம்ங்க! நாங்க நித்ரா - ஸ்ரீதியா (Nithra - sridiya) நிறுவனத்திலிருந்து பேசுறோம். நம்ம {prod_name} பத்தி உங்களுக்கு சொல்லத்தான் கூப்பிட்டோம். இதைப் பத்தி ஒரு நிமிஷம் பேசலாங்களா?"
+                return f"నమస్కారం అండి! మేము శ్రీ దియా పూజా స్టోర్ నుంచి మాట్లాడుతున్నాము (నిత్రా కేలండర్). మన {prod_name} గురించి చెప్పడానికి కాల్ చేశాను. దీని గురించి ఒక నిమిషం మాట్లాడవచ్చా అండి?"
+            return f"வணக்கம்ங்க! நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் (நித்ரா தமிழ் காலண்டர்). நம்ம {prod_name} பத்தி உங்களுக்கு சொல்லத்தான் கூப்பிட்டோம். இதைப் பத்தி ஒரு நிமிஷம் பேசலாங்களா?"
         return None
 
     def _check_unrelated_query(self, text: str, cfg: Dict[str, Any]) -> Optional[str]:
