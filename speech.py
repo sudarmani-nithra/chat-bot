@@ -142,8 +142,8 @@ async def _generate_speech_live_async(
 def _generate_speech_content_sync(
     api_key: str, text: str, model_name: str, voice_name: str
 ) -> bytes:
-    """Audio generation using client.models.generate_content with AUDIO modality."""
-    client = genai.Client(api_key=api_key)
+    """Audio generation using client.models.generate_content with AUDIO modality on v1alpha."""
+    client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
 
     gen_config = types.GenerateContentConfig(
         response_modalities=["AUDIO"],
@@ -186,6 +186,7 @@ def synthesize_tamil_speech(
 
     cleaned_text = text.strip()
 
+    last_err = None
     # 1. If live model requested (e.g. gemini-2.5-flash-native-audio-latest), attempt Live WebSocket on v1alpha
     if "live" in model_name or "native-audio" in model_name:
         for attempt in range(2):
@@ -194,6 +195,7 @@ def synthesize_tamil_speech(
                     _generate_speech_live_async(api_key, cleaned_text, model_name, voice_name)
                 )
             except Exception as e:
+                last_err = e
                 print(f"[Speech] Live WebSocket notice ({e}). Trying HTTP REST TTS fallback...")
                 time.sleep(0.3)
 
@@ -204,9 +206,11 @@ def synthesize_tamil_speech(
             try:
                 return _generate_speech_content_sync(api_key, cleaned_text, m, voice_name)
             except Exception as e:
+                last_err = e
+                print(f"[Speech] TTS model {m} attempt {attempt+1} error: {e}")
                 time.sleep(0.3)
 
-    raise RuntimeError("Failed to generate voice audio across all Gemini speech models.")
+    raise RuntimeError(f"Failed to generate voice audio across all Gemini speech models. Last error: {last_err}")
 
 
 def _get_cache_path(text: str, language: str, voice_name: str) -> Path:
