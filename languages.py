@@ -54,9 +54,11 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "இருங்க, பார்த்து சொல்றேன்.",
             "சரிங்க, பார்த்து சொல்றேன்.",
         ],
-        # Initial greeting (Short & crisp: customer can reply naturally without interruption)
+        # Initial greeting (Real Sri Diya Telecaller Style: mentions brand, product, and enquiry context upfront)
         "initial_greeting": (
-            "வணக்கம் sir, நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் (நித்ரா தமிழ் காலண்டர்)."
+            "வணக்கம் sir, நாங்க ஸ்ரீ தியா பூஜா ஸ்டோர்ல இருந்து பேசுறோம் (நித்ரா தமிழ் காலண்டர்). "
+            "சார், நீங்க பேஸ்புக், இன்ஸ்டாகிராம்ல நம்ம {product_name} பார்த்துட்டு விவரங்கள் கேட்டிருந்தீங்க. "
+            "அதைப் பத்தி சொல்லத்தான் கால் பண்ணோம்."
         ),
         # Lead reason intro (Follow-up context when customer asks "சொல்லுங்க" / "என்ன விஷயம்")
         "lead_reason_intro": (
@@ -328,9 +330,11 @@ LANGUAGES: Dict[str, Dict[str, Any]] = {
             "ఉండండి, చూసి చెప్తాను.",
             "సరే అండి, చూసి చెప్తాను.",
         ],
-        # Initial greeting (Short & crisp)
+        # Initial greeting (Real Sri Diya Telecaller Style: mentions brand, product, and enquiry context upfront)
         "initial_greeting": (
-            "నమస్కారం అండి, మేము శ్రీ దియా పూజా స్టోర్ నుంచి మాట్లాడుతున్నాము (నిత్రా కేలండర్)."
+            "నమస్కారం అండి, మేము శ్రీ దియా పూజా స్టోర్ నుంచి మాట్లాడుతున్నాము (నిత్రా కేలండర్). "
+            "అండి, మీరు ఫేస్‌బుక్ లేదా ఇన్‌స్టాగ్రామ్‌లో మన {product_name} చూసి వివరాలు అడిగారు. "
+            "దాని గురించి చెప్పడానికే కాల్ చేశాము అండి."
         ),
         # Lead reason intro (Follow-up context when customer asks "చెప్పండి")
         "lead_reason_intro": (
